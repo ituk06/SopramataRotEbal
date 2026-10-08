@@ -91,28 +91,28 @@ if page == "0. Климатология и Нагрузки":
     tab1, tab2, tab3, tab4, tab5 = st.tabs(["Макс. Температура", "Мин. Температура", "Снег", "Ветер", "Гололед"])
 
     with tab1:
-        if os.path.exists("Снимок экрана 2026-10-09 в 00.49.04.jpg"):
-            st.image("Снимок экрана 2026-10-09 в 00.49.04.jpg", use_container_width=True)
+        if os.path.exists("Снимок экрана 2026-10-09 в 00.49.04.png"):
+            st.image("Снимок экрана 2026-10-09 в 00.49.04.png", use_container_width=True)
         else:
             st.warning("Карта максимальных температур не найдена.")
     with tab2:
-        if os.path.exists("Снимок экрана 2026-10-09 в 00.49.13.jpg"):
-            st.image("Снимок экрана 2026-10-09 в 00.49.13.jpg", use_container_width=True)
+        if os.path.exists("Снимок экрана 2026-10-09 в 00.49.13.png"):
+            st.image("Снимок экрана 2026-10-09 в 00.49.13.png", use_container_width=True)
         else:
             st.warning("Карта минимальных температур не найдена.")
     with tab3:
-        if os.path.exists("Снимок экрана 2026-10-09 в 00.49.19.jpg"):
-            st.image("Снимок экрана 2026-10-09 в 00.49.19.jpg", use_container_width=True)
+        if os.path.exists("Снимок экрана 2026-10-09 в 00.49.19.png"):
+            st.image("Снимок экрана 2026-10-09 в 00.49.19.png", use_container_width=True)
         else:
             st.warning("Карта снеговых нагрузок не найдена.")
     with tab4:
-        if os.path.exists("Снимок экрана 2026-10-09 в 00.49.27.jpg"):
-            st.image("Снимок экрана 2026-10-09 в 00.49.27.jpg", use_container_width=True)
+        if os.path.exists("Снимок экрана 2026-10-09 в 00.49.27.png"):
+            st.image("Снимок экрана 2026-10-09 в 00.49.27.png", use_container_width=True)
         else:
             st.warning("Карта ветровых нагрузок не найдена.")
     with tab5:
-        if os.path.exists("Снимок экрана 2026-10-09 в 00.49.35.jpg"):
-            st.image("Снимок экрана 2026-10-09 в 00.49.35.jpg", use_container_width=True)
+        if os.path.exists("Снимок экрана 2026-10-09 в 00.49.35.png"):
+            st.image("Снимок экрана 2026-10-09 в 00.49.35.png", use_container_width=True)
         else:
             st.warning("Карта гололедных нагрузок не найдена.")
 

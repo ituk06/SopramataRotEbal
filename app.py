@@ -2,7 +2,6 @@ import streamlit as st
 import math
 import os
 import pandas as pd
-import plotly.express as px
 
 # --- НАСТРОЙКА СТРАНИЦЫ И СТИЛИ ---
 st.set_page_config(page_title="Сопромат Трубопроводов (Учебный комплекс)", page_icon="🛢️", layout="wide")
@@ -20,7 +19,7 @@ st.markdown("""
 SORTAMENT = [4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 14.0, 15.7, 16.0, 17.5, 18.7, 19.1, 20.0, 21.0, 22.0, 23.0,
              24.0, 25.0, 26.0, 27.0, 28.0, 30.0, 32.0, 34.0, 36.0]
 
-# Расширенная база климатических данных для интерактивной карты
+# База климатических данных для интерактивной карты
 CLIMATE_DATA = {
     "г. Губкинский (ЯНАО)": {"t_min": -50.0, "t_max": 30.0, "lat": 64.434, "lon": 76.5026},
     "г. Сургут (ХМАО)": {"t_min": -43.0, "t_max": 26.0, "lat": 61.25, "lon": 73.4167},
@@ -108,21 +107,51 @@ def find_image(base_name):
 if page == "1. Климатология (Интерактивная карта)":
     st.title("1. Определение расчетного температурного перепада (Δt)")
     st.markdown(
-        "<div class='info-text'>Температурный перепад $\Delta t$ — это разница между температурой эксплуатации и температурой, при которой трубу сваривали (замыкали) в траншее. Здесь вы можете выбрать регион на интерактивной карте, и программа сама подтянет климатические данные по СНиП 23-01-99.</div>",
+        "<div class='info-text'>Температурный перепад $\Delta t$ — это разница между температурой эксплуатации и температурой, при которой трубу сваривали (замыкали) в траншее. Здесь вы можете выбрать регион, и программа подтянет климатические данные по СНиП 23-01-99.</div>",
         unsafe_allow_html=True)
 
-    st.markdown("### 🗺️ Интерактивная тепловая карта районов строительства")
+    col_map1, col_map2 = st.columns([1, 1])
+    with col_map1:
+        st.subheader("Выбор района строительства")
+        region = st.selectbox("Выберите город из базы (данные подставятся автоматически):",
+                              list(CLIMATE_DATA.keys()) + ["Задать вручную"])
 
-    # Отрисовка карты с помощью Plotly (исправлена ошибка цвета ice -> px.colors.sequential.ice)
-    df_map = pd.DataFrame.from_dict(CLIMATE_DATA, orient='index').reset_index()
-    df_map.rename(columns={'index': 'Город'}, inplace=True)
-    fig = px.scatter_mapbox(df_map, lat="lat", lon="lon", hover_name="Город",
-                            hover_data={"t_min": True, "t_max": True, "lat": False, "lon": False},
-                            color="t_min", color_continuous_scale=px.colors.sequential.ice,
-                            size_max=15, zoom=2.5, mapbox_style="carto-positron",
-                            title="Тепловая карта минимальных температур (синий = холоднее)")
-    fig.update_traces(marker=dict(size=12))
-    st.plotly_chart(fig, use_container_width=True)
+        # Интерактивная карта через встроенный st.map (работает всегда и без ошибок)
+        if region != "Задать вручную":
+            t_max_val = CLIMATE_DATA[region]["t_max"]
+            t_min_val = CLIMATE_DATA[region]["t_min"]
+            st.info(f"📍 **{region}**: t_min = {t_min_val}°C, t_max = {t_max_val}°C")
+
+            # Отображаем карту с маркером выбранного города
+            df_city = pd.DataFrame([{"lat": CLIMATE_DATA[region]["lat"], "lon": CLIMATE_DATA[region]["lon"]}])
+            st.map(df_city, zoom=3, size=20)
+        else:
+            t_max_val = 30.0
+            t_min_val = -50.0
+            # Если "Задать вручную", показываем карту России
+            st.map(pd.DataFrame([{"lat": 61.5, "lon": 105.3}]), zoom=2)
+
+    with col_map2:
+        st.subheader("Оригинальные карты СНиП")
+        tab1, tab2, tab3, tab4, tab5 = st.tabs(["t_max", "t_min", "Снег", "Ветер", "Гололед"])
+        with tab1:
+            img = find_image("Снимок экрана 2026-10-09 в 00.49.04") or find_image("map_max")
+            if img:
+                st.image(img, use_container_width=True)
+            else:
+                st.warning("Файл карты t_max не найден.")
+        with tab2:
+            img = find_image("Снимок экрана 2026-10-09 в 00.49.13") or find_image("map_min")
+            if img: st.image(img, use_container_width=True)
+        with tab3:
+            img = find_image("Снимок экрана 2026-10-09 в 00.49.19") or find_image("map_snow")
+            if img: st.image(img, use_container_width=True)
+        with tab4:
+            img = find_image("Снимок экрана 2026-10-09 в 00.49.27") or find_image("map_wind")
+            if img: st.image(img, use_container_width=True)
+        with tab5:
+            img = find_image("Снимок экрана 2026-10-09 в 00.49.35") or find_image("map_ice")
+            if img: st.image(img, use_container_width=True)
 
     st.markdown("### Ввод данных для расчета температур")
     col1, col2 = st.columns(2)
@@ -132,16 +161,6 @@ if page == "1. Климатология (Интерактивная карта)"
         t_product_default = 5.0 if st.session_state.product_type == "Нефть" else 6.0
         st.session_state.t_product = st.number_input("Температура эксплуатации продукта (t_э), °C",
                                                      value=t_product_default)
-
-        region = st.selectbox("Выберите район из базы (данные подставятся автоматически):",
-                              list(CLIMATE_DATA.keys()) + ["Задать вручную"])
-        if region != "Задать вручную":
-            t_max_val = CLIMATE_DATA[region]["t_max"]
-            t_min_val = CLIMATE_DATA[region]["t_min"]
-        else:
-            t_max_val = 30.0
-            t_min_val = -50.0
-
         t_max_map = st.number_input("Максимальная температура (t_max), °C", value=t_max_val)
         t_min_map = st.number_input("Минимальная температура (t_min), °C", value=t_min_val)
 
@@ -163,12 +182,7 @@ if page == "1. Климатология (Интерактивная карта)"
         st.success(f"**Расчетный (наихудший) температурный перепад:** Δt = **{calc_dt} °C**")
         if st.button("Сохранить Δt"):
             st.session_state.delta_t = calc_dt
-
-    with st.expander("Посмотреть оригинальные карты из СНиП"):
-        img = find_image("Снимок экрана 2026-10-09 в 00.49.04") or find_image("map_max")
-        if img: st.image(img, caption="Карта максимальных температур", use_container_width=True)
-        img2 = find_image("Снимок экрана 2026-10-09 в 00.49.13") or find_image("map_min")
-        if img2: st.image(img2, caption="Карта минимальных температур", use_container_width=True)
+            st.success("Перепад температур успешно сохранен!")
 
 # ==============================================================================
 # ЭТАП 2: ТОЛЩИНА СТЕНКИ
@@ -223,7 +237,7 @@ elif page == "2. Пример 8.1: Толщина стенки":
         st.rerun()
 
 # ==============================================================================
-# ЭТАП 3: ПРОВЕРКА ПРОЧНОСТИ (ОБЪЕДИНЕННАЯ)
+# ЭТАП 3: ПРОВЕРКА ПРОЧНОСТИ
 # ==============================================================================
 elif page == "3. Пример 8.2: Проверка прочности":
     st.title("Пример 8.2. Проверка прочности трубопровода")
@@ -313,9 +327,9 @@ elif page == "3. Пример 8.2: Проверка прочности":
                 with st.expander(f"Итерация {iteration}. Проверка δ_н = {current_delta} мм",
                                  expanded=True if is_ok else False):
                     st.write(
-                        f"1) Условие кольцевых напряжений: $\sigma_{{кц}} = {sig_kc:.2f}$ МПа $\le$ $[\sigma_{{кц}}] = {sig_kc_allow:.2f}$ МПа $\\rightarrow$ **{'ОК' if sig_kc <= sig_kc_allow else 'FAIL'}**")
+                        f"1) Условие кольцевых напряжений: $\sigma_{{кц}} = {sig_kc:.2f}$ МПа $\le$ $[\sigma_{{кц}}] = {sig_kc_allow:.2f}$ МПа $\\rightarrow$ **{'ВЫПОЛНЯЕТСЯ' if sig_kc <= sig_kc_allow else 'НЕ ВЫПОЛНЯЕТСЯ'}**")
                     st.write(
-                        f"2) Условие продольных напряжений: $|\sigma_{{пр}}| = {abs(sig_pr):.2f}$ МПа $\le$ $[\sigma_{{пр}}] = {sig_pr_allow:.2f}$ МПа $\\rightarrow$ **{'ОК' if abs(sig_pr) <= sig_pr_allow else 'FAIL'}**")
+                        f"2) Условие продольных напряжений: $|\sigma_{{пр}}| = {abs(sig_pr):.2f}$ МПа $\le$ $[\sigma_{{пр}}] = {sig_pr_allow:.2f}$ МПа $\\rightarrow$ **{'ВЫПОЛНЯЕТСЯ' if abs(sig_pr) <= sig_pr_allow else 'НЕ ВЫПОЛНЯЕТСЯ'}**")
 
                 if is_ok:
                     st.success(
@@ -396,6 +410,8 @@ elif page == "4. Пример 8.3: Продольная устойчивость
         rf"q_{{тр}} = q_{{мет}} + q_{{прод}} + q_{{из}} = {q_met:.0f} + {q_prod:.0f} + {q_ins:.0f} = \mathbf{{{q_tr:.0f} \text{{ Н/м}}}}")
 
     st.write("3. Определение эквивалентного продольного сжимающего усилия $S$:")
+    st.markdown("<div class='info-text'>Это та самая сила, которая пытается вытолкнуть трубу наружу.</div>",
+                unsafe_allow_html=True)
     st.latex(
         rf"S = [(0.5 - \mu)\sigma_{{кц}} + \alpha E \Delta t] \cdot F = [(0.5 - 0.3) \cdot {sigma_kc:.2f} + {st.session_state.alpha} \cdot {st.session_state.E} \cdot {st.session_state.delta_t}] \cdot {F:.4f} = \mathbf{{{S:.2f} \text{{ МН}}}}")
 

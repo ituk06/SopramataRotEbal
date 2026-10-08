@@ -2,10 +2,9 @@ import streamlit as st
 import math
 import os
 import pandas as pd
-import plotly.express as px
 
 # --- НАСТРОЙКА СТРАНИЦЫ И СТИЛИ ---
-st.set_page_config(page_title="Сопромат Трубопроводов (Учебный курс)", page_icon="🛢️", layout="wide")
+st.set_page_config(page_title="Сопромат Трубопроводов (Учебный комплекс)", page_icon="🛢️", layout="wide")
 
 st.markdown("""
     <style>
@@ -20,7 +19,7 @@ st.markdown("""
 SORTAMENT = [4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 14.0, 15.7, 16.0, 17.5, 18.7, 19.1, 20.0, 21.0, 22.0, 23.0,
              24.0, 25.0, 26.0, 27.0, 28.0, 30.0, 32.0, 34.0, 36.0]
 
-# Обширная база климатических данных (СНиП 23-01-99)
+# База климатических данных
 CLIMATE_DATA = {
     "г. Губкинский (ЯНАО)": {"t_min": -50.0, "t_max": 30.0, "lat": 64.434, "lon": 76.5026, "snow": 5, "wind": 3},
     "г. Сургут (ХМАО)": {"t_min": -43.0, "t_max": 26.0, "lat": 61.25, "lon": 73.4167, "snow": 4, "wind": 2},
@@ -69,7 +68,7 @@ if 'mu' not in st.session_state: st.session_state.mu = 0.3
 st.sidebar.title("🛢️ Учебный комплекс")
 st.sidebar.markdown("Навигация по разделам РГР:")
 page = st.sidebar.radio("Выберите этап:", [
-    "1. Климатология (Интерактивная карта)",
+    "1. Климатология (Район строительства)",
     "2. Пример 8.1: Толщина стенки",
     "3. Пример 8.2: Проверка прочности",
     "4. Пример 8.3: Продольная устойчивость",
@@ -107,9 +106,9 @@ def find_image(base_name):
 
 
 # ==============================================================================
-# ЭТАП 1: КЛИМАТОЛОГИЯ (ИНТЕРАКТИВНАЯ КАРТА)
+# ЭТАП 1: КЛИМАТОЛОГИЯ
 # ==============================================================================
-if page == "1. Климатология (Интерактивная карта)":
+if page == "1. Климатология (Район строительства)":
     st.title("Определение расчетного температурного перепада (Δt)")
     st.markdown(
         "<div class='info-text'><b>Учебная справка:</b> Температурный перепад $\Delta t$ — это разница между температурой продукта внутри трубы и температурой замыкания (когда трубу сварили в траншее). Из-за этого возникают продольные напряжения, которые могут разорвать или выпучить трубу.</div>",
@@ -121,69 +120,43 @@ if page == "1. Климатология (Интерактивная карта)"
         region = st.selectbox("Выберите город из базы:", list(CLIMATE_DATA.keys()) + ["Задать вручную (Свой город)"])
 
         if region == "Задать вручную (Свой город)":
-            st.markdown("Впишите данные своего региона:")
             col_c1, col_c2 = st.columns(2)
             custom_name = col_c1.text_input("Название региона", value="Мой город")
-            custom_lat = col_c1.number_input("Широта (Lat)", value=55.0)
-            custom_lon = col_c2.number_input("Долгота (Lon)", value=55.0)
-            t_max_val = col_c2.number_input("Максимальная температура (t_max), °C", value=30.0)
-            t_min_val = col_c1.number_input("Минимальная температура (t_min), °C", value=-30.0)
-            custom_snow = col_c2.number_input("Снеговой район (1-8)", value=3, min_value=1, max_value=8)
-            custom_wind = col_c1.number_input("Ветровой район (1-7)", value=2, min_value=1, max_value=7)
+            t_max_val = col_c2.number_input("Макс. температура (t_max), °C", value=30.0)
+            t_min_val = col_c1.number_input("Мин. температура (t_min), °C", value=-30.0)
+            custom_lat = col_c2.number_input("Широта (Lat)", value=55.0)
+            custom_lon = col_c1.number_input("Долгота (Lon)", value=55.0)
+            custom_snow = col_c2.number_input("Снеговой район (1-8)", value=3)
+            custom_wind = col_c1.number_input("Ветровой район (1-7)", value=2)
+
+            df_map = pd.DataFrame([{"lat": custom_lat, "lon": custom_lon}])
         else:
             t_max_val = CLIMATE_DATA[region]["t_max"]
             t_min_val = CLIMATE_DATA[region]["t_min"]
             custom_snow = CLIMATE_DATA[region]["snow"]
             custom_wind = CLIMATE_DATA[region]["wind"]
-            st.info(
-                f"📍 **{region}**: t_min = {t_min_val}°C, t_max = {t_max_val}°C, Снег: район {custom_snow}, Ветер: район {custom_wind}")
+            df_map = pd.DataFrame([{"lat": CLIMATE_DATA[region]["lat"], "lon": CLIMATE_DATA[region]["lon"]}])
+
+        st.markdown(f"**Выбранный регион на карте:**")
+        st.map(df_map, zoom=3)
 
     with col_map2:
-        st.subheader("Режимы интерактивной карты")
-        map_mode = st.radio("Отображение климатических зон:",
-                            ["Зимние температуры (t_min)", "Летние температуры (t_max)", "Снеговые районы",
-                             "Ветровые районы"],
-                            horizontal=True)
+        st.subheader("Климатические параметры района")
+        # Красивые карточки-метрики без сторонних библиотек
+        c1, c2 = st.columns(2)
+        c1.metric("Мин. температура (t_min)", f"{t_min_val} °C")
+        c2.metric("Макс. температура (t_max)", f"{t_max_val} °C")
+        c3, c4 = st.columns(2)
+        c3.metric("Снеговой район", f"№ {custom_snow}")
+        c4.metric("Ветровой район", f"№ {custom_wind}")
 
-    # Подготовка данных для карты Plotly
-    df_map = pd.DataFrame.from_dict(CLIMATE_DATA, orient='index').reset_index()
-    df_map.rename(columns={'index': 'Город'}, inplace=True)
-    df_map['size'] = 15
-
-    if region == "Задать вручную (Свой город)":
-        custom_data = pd.DataFrame([{"Город": custom_name, "t_min": t_min_val, "t_max": t_max_val,
-                                     "lat": custom_lat, "lon": custom_lon, "snow": custom_snow, "wind": custom_wind,
-                                     "size": 15}])
-        df_map = pd.concat([df_map, custom_data], ignore_index=True)
-
-    # Задаем надежные цветовые шкалы
-    if map_mode == "Зимние температуры (t_min)":
-        color_col, color_scale, title = "t_min", "Blues_r", "Тепловая зона: Минимальные температуры (Холоднее = Темнее)"
-    elif map_mode == "Летние температуры (t_max)":
-        color_col, color_scale, title = "t_max", "YlOrRd", "Тепловая зона: Максимальные температуры (Жарче = Темнее)"
-    elif map_mode == "Снеговые районы":
-        color_col, color_scale, title = "snow", "Blues", "Снеговые районы (Интенсивность осадков)"
-    else:
-        color_col, color_scale, title = "wind", "Viridis", "Ветровые районы (Ветровая нагрузка)"
-
-    fig = px.scatter_mapbox(df_map, lat="lat", lon="lon", hover_name="Город",
-                            hover_data=["t_min", "t_max", "snow", "wind"],
-                            color=color_col, color_continuous_scale=color_scale,
-                            size="size", zoom=2.5, opacity=0.8, mapbox_style="carto-positron", title=title)
-    st.plotly_chart(fig, use_container_width=True)
-
-    st.markdown("### Расчет температур замыкания")
-    col3, col4 = st.columns(2)
-    with col3:
+        st.markdown("---")
+        st.subheader("Расчет температур замыкания")
         st.session_state.product_type = st.radio("Тип транспортируемого продукта:", ["Нефть", "Газ"],
                                                  index=0 if st.session_state.product_type == "Нефть" else 1)
         st.session_state.t_product = st.number_input("Температура эксплуатации продукта (t_э), °C",
                                                      value=5.0 if st.session_state.product_type == "Нефть" else 6.0)
 
-    with col4:
-        st.markdown(
-            "<div class='info-text'><b>Логика:</b> При отсутствии точных данных о дате сварки стыков, берем наихудший сценарий. Летом: температура воздуха + 3°C. Зимой: температура воздуха - 6°C.</div>",
-            unsafe_allow_html=True)
         t_x = t_min_val - 6.0
         t_m = t_max_val + 3.0
         dt_x = st.session_state.t_product - t_x
@@ -203,10 +176,22 @@ if page == "1. Климатология (Интерактивная карта)"
             st.success("Перепад сохранен! Переходите к Этапу 2.")
 
     with st.expander("Посмотреть оригинальные карты из СНиП"):
-        img = find_image("Снимок экрана 2026-10-09 в 00.49.04") or find_image("map_max")
-        if img: st.image(img, caption="Карта максимальных температур", use_container_width=True)
-        img2 = find_image("Снимок экрана 2026-10-09 в 00.49.13") or find_image("map_min")
-        if img2: st.image(img2, caption="Карта минимальных температур", use_container_width=True)
+        tab1, tab2, tab3, tab4, tab5 = st.tabs(["t_max", "t_min", "Снег", "Ветер", "Гололед"])
+        with tab1:
+            img = find_image("Снимок экрана 2026-10-09 в 00.49.04") or find_image("map_max")
+            if img: st.image(img, caption="Карта максимальных температур", use_container_width=True)
+        with tab2:
+            img2 = find_image("Снимок экрана 2026-10-09 в 00.49.13") or find_image("map_min")
+            if img2: st.image(img2, caption="Карта минимальных температур", use_container_width=True)
+        with tab3:
+            img3 = find_image("Снимок экрана 2026-10-09 в 00.49.19") or find_image("map_snow")
+            if img3: st.image(img3, caption="Снеговые районы", use_container_width=True)
+        with tab4:
+            img4 = find_image("Снимок экрана 2026-10-09 в 00.49.27") or find_image("map_wind")
+            if img4: st.image(img4, caption="Ветровые районы", use_container_width=True)
+        with tab5:
+            img5 = find_image("Снимок экрана 2026-10-09 в 00.49.35") or find_image("map_ice")
+            if img5: st.image(img5, caption="Гололедные районы", use_container_width=True)
 
 # ==============================================================================
 # ЭТАП 2: ТОЛЩИНА СТЕНКИ
@@ -317,15 +302,14 @@ elif page == "3. Пример 8.2: Проверка прочности":
                 f"**Условие 3.20 ($|\sigma_{{пр}}^н| \le [\sigma_{{пр}}]$):** <span style='color:red'>НЕ ВЫПОЛНЯЕТСЯ ❌ (FALSE)</span>",
                 unsafe_allow_html=True)
 
+        st.markdown("---")
+
         if is_ok:
             st.success(f"Прочность обеспечена! Рекомендуемая толщина стенки: {check_delta} мм.")
-
             rho_min = 1000 * (D_vn / 1000)
-            st.write("---")
             st.write("4. Минимальный радиус упругого изгиба для прохода СОД:")
             st.latex(
                 rf"\rho_{{min}} = 1000 \cdot D_{{вн}} = 1000 \cdot {D_vn / 1000:.3f} = \mathbf{{{rho_min:.1f} \text{{ м}}}}")
-
             if st.button("Зафиксировать эту толщину для следующих расчетов"):
                 st.session_state.delta_n = check_delta
                 st.rerun()
@@ -462,7 +446,7 @@ elif page == "4. Пример 8.3: Продольная устойчивость
             unsafe_allow_html=True)
     else:
         st.markdown(
-            f"<div class='error-block'>Условие не выполняется: {S:.2f} МН > {S_allow:.2f} МН. <br>Устойчивость НЕ ОБЕСПЕЧЕНА. Требуется увеличить глубину заложения $h_0$ или применить утяжелители.</div>",
+            f"<div class='error-block'>Условие не выполняется: {S:.2f} МН > {S_allow:.2f} МН. <br>Устойчивость НЕ ОБЕСПЕЧЕНА. Требуется увеличить глубину заложения $h_0$ или выполнить балластировку (пригрузы).</div>",
             unsafe_allow_html=True)
 
 # ==============================================================================
@@ -541,7 +525,7 @@ elif page == "5. Примеры 8.4-8.6: Устойчивость в насып�
         rf"q_{{в\_треб}} = \frac{{1.25 \cdot S \cdot k_\alpha}}{{\rho}} = \mathbf{{{req_q_v * 1000:.2f} \text{{ кН/м}}}}")
     if q_v >= req_q_v:
         st.success(
-            f"Устойчивость вертикального поворота ОБЕСПЕЧЕНА. Веса грунта над трубой (q_в = {q_v * 1000:.2f} кН/м) достаточно для удержания.")
+            f"Устойчивость вертикального поворота (выпуклостью вверх) обеспечена. Веса грунта над трубой (q_в = {q_v * 1000:.2f} кН/м) достаточно для удержания.")
     else:
         st.error("Труба 'выскочит' из насыпи вверх. Увеличьте радиус поворота или вес засыпки.")
 

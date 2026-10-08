@@ -2,10 +2,9 @@ import streamlit as st
 import math
 import os
 import pandas as pd
-import plotly.express as px
 
 # --- НАСТРОЙКА СТРАНИЦЫ И СТИЛИ ---
-st.set_page_config(page_title="Сопромат Трубопроводов (Учебный комплекс)", page_icon="🛢️", layout="wide")
+st.set_page_config(page_title="Сопромат Трубопроводов (Учебный курс)", page_icon="🛢️", layout="wide")
 
 st.markdown("""
     <style>
@@ -20,7 +19,7 @@ st.markdown("""
 SORTAMENT = [4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 14.0, 15.7, 16.0, 17.5, 18.7, 19.1, 20.0, 21.0, 22.0, 23.0,
              24.0, 25.0, 26.0, 27.0, 28.0, 30.0, 32.0, 34.0, 36.0]
 
-# Расширенная база климатических данных для формирования зон на карте
+# Обширная база климатических данных (СНиП 23-01-99)
 CLIMATE_DATA = {
     "г. Губкинский (ЯНАО)": {"t_min": -50.0, "t_max": 30.0, "lat": 64.434, "lon": 76.5026, "snow": 5, "wind": 3},
     "г. Сургут (ХМАО)": {"t_min": -43.0, "t_max": 26.0, "lat": 61.25, "lon": 73.4167, "snow": 4, "wind": 2},
@@ -38,13 +37,6 @@ CLIMATE_DATA = {
     "г. Краснодар": {"t_min": -15.0, "t_max": 35.0, "lat": 45.0393, "lon": 38.9806, "snow": 2, "wind": 3},
     "г. Мурманск": {"t_min": -28.0, "t_max": 20.0, "lat": 68.9585, "lon": 33.0827, "snow": 5, "wind": 5},
     "г. Хабаровск": {"t_min": -30.0, "t_max": 28.0, "lat": 48.4814, "lon": 135.0721, "snow": 2, "wind": 3},
-    "г. Санкт-Петербург": {"t_min": -26.0, "t_max": 25.0, "lat": 59.9343, "lon": 30.3351, "snow": 3, "wind": 2},
-    "г. Чита": {"t_min": -40.0, "t_max": 29.0, "lat": 52.0333, "lon": 113.55, "snow": 1, "wind": 3},
-    "г. Магадан": {"t_min": -30.0, "t_max": 18.0, "lat": 59.5667, "lon": 150.8, "snow": 4, "wind": 6},
-    "г. Самара": {"t_min": -30.0, "t_max": 30.0, "lat": 53.2001, "lon": 50.15, "snow": 4, "wind": 3},
-    "г. Омск": {"t_min": -38.0, "t_max": 28.0, "lat": 54.9924, "lon": 73.3686, "snow": 3, "wind": 3},
-    "г. Красноярск": {"t_min": -40.0, "t_max": 28.0, "lat": 56.0184, "lon": 92.8672, "snow": 3, "wind": 3},
-    "г. Петропавловск-Камчатский": {"t_min": -15.0, "t_max": 18.0, "lat": 53.0222, "lon": 158.646, "snow": 6, "wind": 6}
 }
 
 
@@ -73,7 +65,7 @@ if 'E' not in st.session_state: st.session_state.E = 206000.0
 if 'alpha' not in st.session_state: st.session_state.alpha = 0.000012
 if 'mu' not in st.session_state: st.session_state.mu = 0.3
 
-st.sidebar.title("🛢️ Учебный комплекс")
+st.sidebar.title("🛢️ Навигация по расчету")
 page = st.sidebar.radio("Выберите этап:", [
     "1. Климатология (Интерактивная карта)",
     "2. Пример 8.1: Толщина стенки",
@@ -116,9 +108,9 @@ def find_image(base_name):
 # ЭТАП 1: КЛИМАТОЛОГИЯ
 # ==============================================================================
 if page == "1. Климатология (Интерактивная карта)":
-    st.title("Определение расчетного температурного перепада (Δt)")
+    st.title("1. Определение расчетного температурного перепада (Δt)")
     st.markdown(
-        "<div class='info-text'><b>Учебная справка:</b> Температурный перепад Δt — это разница между температурой продукта внутри трубы и температурой замыкания (когда трубу сварили в траншее). Из-за перепада возникают продольные напряжения, которые могут разорвать или выпучить трубу.</div>",
+        "<div class='info-text'><b>Учебная справка:</b> Температурный перепад Δt — это разница между температурой продукта внутри трубы и температурой замыкания (когда трубу сварили в траншее). Из-за этого возникают продольные напряжения, которые могут разорвать или выпучить трубу.</div>",
         unsafe_allow_html=True)
 
     col_map1, col_map2 = st.columns([1, 1])
@@ -136,60 +128,34 @@ if page == "1. Климатология (Интерактивная карта)"
             custom_snow = col_c2.number_input("Снеговой район (1-8)", value=3)
             custom_wind = col_c1.number_input("Ветровой район (1-7)", value=2)
 
-            df_map = pd.DataFrame(
-                [{"Город": custom_name, "lat": custom_lat, "lon": custom_lon, "t_min": t_min_val, "t_max": t_max_val,
-                  "snow": custom_snow, "wind": custom_wind, "marker_size": 30}])
+            df_map = pd.DataFrame([{"lat": custom_lat, "lon": custom_lon}])
         else:
             t_max_val = CLIMATE_DATA[region]["t_max"]
             t_min_val = CLIMATE_DATA[region]["t_min"]
             custom_snow = CLIMATE_DATA[region]["snow"]
             custom_wind = CLIMATE_DATA[region]["wind"]
-            st.info(
-                f"📍 **{region}**: t_min = {t_min_val}°C, t_max = {t_max_val}°C, Снег: район {custom_snow}, Ветер: район {custom_wind}")
+            df_map = pd.DataFrame([{"lat": CLIMATE_DATA[region]["lat"], "lon": CLIMATE_DATA[region]["lon"]}])
+
+        st.markdown(f"**Выбранный регион на карте:**")
+        st.map(df_map, zoom=3)
 
     with col_map2:
-        st.subheader("Режимы интерактивной карты")
-        map_mode = st.radio("Отображение климатических зон:",
-                            ["Зимние температуры (t_min)", "Летние температуры (t_max)", "Снеговые районы",
-                             "Ветровые районы"],
-                            horizontal=True)
+        st.subheader("Климатические параметры района")
+        # Красивые карточки-метрики
+        c1, c2 = st.columns(2)
+        c1.metric("Мин. температура (t_min)", f"{t_min_val} °C")
+        c2.metric("Макс. температура (t_max)", f"{t_max_val} °C")
+        c3, c4 = st.columns(2)
+        c3.metric("Снеговой район", f"№ {custom_snow}")
+        c4.metric("Ветровой район", f"№ {custom_wind}")
 
-    # Подготовка данных для цветной карты Plotly
-    if region != "Задать вручную (Свой город)":
-        df_map = pd.DataFrame.from_dict(CLIMATE_DATA, orient='index').reset_index()
-        df_map.rename(columns={'index': 'Город'}, inplace=True)
-        df_map['marker_size'] = 30  # Увеличиваем радиус для эффекта зон
-
-    # Выбор цветовой шкалы
-    if map_mode == "Зимние температуры (t_min)":
-        color_col, color_scale, title = "t_min", "Blues_r", "Тепловая зона: Минимальные температуры (Холоднее = Темнее)"
-    elif map_mode == "Летние температуры (t_max)":
-        color_col, color_scale, title = "t_max", "YlOrRd", "Тепловая зона: Максимальные температуры (Жарче = Темнее)"
-    elif map_mode == "Снеговые районы":
-        color_col, color_scale, title = "snow", "Blues", "Снеговые районы (Интенсивность осадков)"
-    else:
-        color_col, color_scale, title = "wind", "Viridis", "Ветровые районы (Ветровая нагрузка)"
-
-    fig = px.scatter_mapbox(df_map, lat="lat", lon="lon", hover_name="Город",
-                            hover_data=["t_min", "t_max", "snow", "wind"],
-                            color=color_col, color_continuous_scale=color_scale,
-                            size="marker_size", zoom=2.0, opacity=0.7, mapbox_style="carto-positron", title=title,
-                            size_max=40)
-    fig.update_layout(margin={"r": 0, "t": 40, "l": 0, "b": 0})
-    st.plotly_chart(fig, use_container_width=True)
-
-    st.markdown("### Расчет температур замыкания")
-    col3, col4 = st.columns(2)
-    with col3:
+        st.markdown("---")
+        st.subheader("Расчет температур замыкания")
         st.session_state.product_type = st.radio("Тип транспортируемого продукта:", ["Нефть", "Газ"],
                                                  index=0 if st.session_state.product_type == "Нефть" else 1)
         st.session_state.t_product = st.number_input("Температура эксплуатации продукта (t_э), °C",
                                                      value=5.0 if st.session_state.product_type == "Нефть" else 6.0)
 
-    with col4:
-        st.markdown(
-            "<div class='info-text'><b>Логика:</b> При отсутствии точных данных о дате сварки стыков, берем наихудший сценарий. Летом: температура воздуха + 3°C (нагрев трубы солнцем). Зимой: температура воздуха - 6°C.</div>",
-            unsafe_allow_html=True)
         t_x = t_min_val - 6.0
         t_m = t_max_val + 3.0
         dt_x = st.session_state.t_product - t_x
@@ -232,7 +198,7 @@ if page == "1. Климатология (Интерактивная карта)"
 elif page == "2. Пример 8.1: Толщина стенки":
     st.title("Пример 8.1. Определение расчетной толщины стенки")
     st.markdown(
-        "<div class='info-text'><b>Учебная справка:</b> Здесь определяется минимально необходимая толщина стенки трубы по безмоментной теории оболочек. Она рассчитывается только на внутреннее давление продукта (распирание). Затем берется ближайшая стандартная толщина по ГОСТ.</div>",
+        "<div class='info-text'><b>Учебная справка:</b> Здесь определяется минимально необходимая толщина стенки трубы по безмоментной теории оболочек. Она рассчитывается только на <b>внутреннее давление продукта</b> (распирание). Затем мы берем ближайшую стандартную толщину по ГОСТ. Эта базовая толщина позже будет проверяться на температурные перепады.</div>",
         unsafe_allow_html=True)
 
     col1, col2, col3 = st.columns(3)
@@ -268,7 +234,7 @@ elif page == "2. Пример 8.1: Толщина стенки":
         rf"\delta = \frac{{n_p \cdot p \cdot D_н}}{{2(R_1 + n_p \cdot p)}} = \frac{{{n_p} \cdot {st.session_state.P} \cdot {st.session_state.D_H}}}{{2({R1:.2f} + {n_p} \cdot {st.session_state.P})}} = \mathbf{{{delta_calc:.2f} \text{{ мм}}}}")
 
     st.markdown(
-        f"<div class='result-block'>3. Округляем в большую сторону до стандартного значения по ГОСТ. Для труб D<sub>N</sub> ≥ 1000 мм толщина не может быть меньше 12 мм.<br><br><b>Принятая предварительная толщина стенки: δ_н = {delta_nom:.1f} мм</b></div>",
+        f"<div class='result-block'>3. Согласно требованиям, округляем полученное значение в большую сторону до ближайшего по ГОСТ/ТУ. Для труб D<sub>N</sub> ≥ 1000 мм толщина не может быть меньше 12 мм.<br><br><b>Принятая предварительная толщина стенки: δ_н = {delta_nom:.1f} мм</b></div>",
         unsafe_allow_html=True)
 
     if st.button("Сохранить и перейти к проверке прочности"):
@@ -440,7 +406,8 @@ elif page == "4. Пример 8.3: Продольная устойчивость
 
     st.markdown("### Подробный расчет с пояснениями")
 
-    st.write("1. Вычисление геометрических характеристик сечения трубы:")
+    st.write(
+        "1. Вычисление геометрических характеристик сечения трубы (считаем площадь и момент инерции металлического кольца):")
     st.latex(
         rf"F = \frac{{\pi \cdot (D_н^2 - D_{{вн}}^2)}}{{4}} = \frac{{3.1416 \cdot ({D_H_m}^2 - {D_vn_m:.3f}^2)}}{{4}} = \mathbf{{{F:.4f} \text{{ м}}^2}}")
     st.latex(
@@ -568,7 +535,7 @@ elif page == "5. Примеры 8.4-8.6: Устойчивость в насып�
 elif page == "6. Пример 8.7: Продольные перемещения":
     st.title("Пример 8.7. Продольные перемещения свободного конца")
     st.markdown(
-        "<div class='info-text'><b>Учебная справка:</b> Этот расчет позволяет определить, насколько трубопровод сдвинется в продольном направлении (например, при выходе на поверхность к крановому узлу или на надземном переходе) из-за температурного расширения и давления. Это критически важно в местах, где труба выходит на поверхность, чтобы не оторвало арматуру.</div>",
+        "<div class='info-text'><b>Учебная справка:</b> Этот расчет позволяет определить, насколько трубопровод сдвинется в продольном направлении из-за температурного расширения и давления. Это критически важно в местах, где труба выходит на поверхность (к крановому узлу или на надземном переходе), чтобы не оторвало арматуру.</div>",
         unsafe_allow_html=True)
 
     col1, col2 = st.columns(2)

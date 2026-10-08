@@ -20,6 +20,7 @@ SORTAMENT = [4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 14.0, 15.7, 16.0, 1
 
 
 def get_next_thickness(calc_thickness, min_thickness=12.0):
+    """Возвращает ближайшую большую толщину стенки из сортамента."""
     target = max(calc_thickness, min_thickness)
     for t in SORTAMENT:
         if t >= target:
@@ -38,7 +39,7 @@ if 'm' not in st.session_state: st.session_state.m = 0.990
 if 'k1' not in st.session_state: st.session_state.k1 = 1.34
 if 'k2' not in st.session_state: st.session_state.k2 = 1.15
 if 'k_H' not in st.session_state: st.session_state.k_H = 1.100
-if 'delta_n' not in st.session_state: st.session_state.delta_n = 11.0
+if 'delta_n' not in st.session_state: st.session_state.delta_n = 12.0
 if 'delta_t' not in st.session_state: st.session_state.delta_t = 61.0
 if 'E' not in st.session_state: st.session_state.E = 206000.0
 if 'alpha' not in st.session_state: st.session_state.alpha = 0.000012
@@ -58,6 +59,34 @@ page = st.sidebar.radio("Выберите раздел:", [
 st.sidebar.markdown("---")
 st.sidebar.info(f"**Толщина стенки в памяти:**\n\nδ_н = {st.session_state.delta_n} мм")
 
+
+def check_strength(delta, dt):
+    D_vn = st.session_state.D_H - 2 * delta
+    sigma_kc_n = st.session_state.P * D_vn / (2 * delta)
+    sigma_kc_allow = (st.session_state.m / (0.9 * st.session_state.k_H)) * st.session_state.R2_n
+
+    sigma_pr_n = -st.session_state.alpha * st.session_state.E * dt + st.session_state.mu * sigma_kc_n
+
+    if sigma_pr_n < 0:
+        under_sqrt = 1 - 0.75 * (sigma_kc_n / sigma_kc_allow) ** 2
+        psi_1 = math.sqrt(under_sqrt) - 0.5 * (sigma_kc_n / sigma_kc_allow) if under_sqrt >= 0 else 0
+    else:
+        psi_1 = 1.0
+
+    sigma_pr_allow = psi_1 * sigma_kc_allow
+    is_ok = (sigma_kc_n <= sigma_kc_allow) and (abs(sigma_pr_n) <= sigma_pr_allow)
+    return is_ok, sigma_kc_n, sigma_kc_allow, sigma_pr_n, psi_1, sigma_pr_allow
+
+
+def find_image(base_name):
+    """Ищет файл картинки с расширением .png, .jpg или .jpeg"""
+    for ext in ['.png', '.PNG', '.jpg', '.JPG', '.jpeg', '.JPEG']:
+        filename = base_name + ext
+        if os.path.exists(filename):
+            return filename
+    return None
+
+
 # ==============================================================================
 # ЭТАП 0: КЛИМАТОЛОГИЯ И НАГРУЗКИ
 # ==============================================================================
@@ -72,37 +101,41 @@ if page == "0. Климатология и Нагрузки":
     tab1, tab2, tab3, tab4, tab5 = st.tabs(["Макс. Температура", "Мин. Температура", "Снег", "Ветер", "Гололед"])
 
     with tab1:
-        if os.path.exists("Снимок экрана 2026-10-09 в 00.49.04.jpg"):
-            st.image("Снимок экрана 2026-10-09 в 00.49.04.jpg", use_container_width=True)
+        img = find_image("Снимок экрана 2026-10-09 в 00.49.04") or find_image("map_max")
+        if img:
+            st.image(img, use_container_width=True)
         else:
-            st.warning("Файл 'Снимок экрана 2026-10-09 в 00.49.04.jpg' не найден в папке проекта.")
+            st.warning("Карта максимальных температур не найдена в папке проекта.")
     with tab2:
-        if os.path.exists("Снимок экрана 2026-10-09 в 00.49.13.jpg"):
-            st.image("Снимок экрана 2026-10-09 в 00.49.13.jpg", use_container_width=True)
+        img = find_image("Снимок экрана 2026-10-09 в 00.49.13") or find_image("map_min")
+        if img:
+            st.image(img, use_container_width=True)
         else:
-            st.warning("Файл 'Снимок экрана 2026-10-09 в 00.49.13.jpg' не найден в папке проекта.")
+            st.warning("Карта минимальных температур не найдена в папке проекта.")
     with tab3:
-        if os.path.exists("Снимок экрана 2026-10-09 в 00.49.19.jpg"):
-            st.image("Снимок экрана 2026-10-09 в 00.49.19.jpg", use_container_width=True)
+        img = find_image("Снимок экрана 2026-10-09 в 00.49.19") or find_image("map_snow")
+        if img:
+            st.image(img, use_container_width=True)
         else:
-            st.warning("Файл 'Снимок экрана 2026-10-09 в 00.49.19.jpg' не найден в папке проекта.")
+            st.warning("Карта снеговых нагрузок не найдена в папке проекта.")
     with tab4:
-        if os.path.exists("Снимок экрана 2026-10-09 в 00.49.27.jpg"):
-            st.image("Снимок экрана 2026-10-09 в 00.49.27.jpg", use_container_width=True)
+        img = find_image("Снимок экрана 2026-10-09 в 00.49.27") or find_image("map_wind")
+        if img:
+            st.image(img, use_container_width=True)
         else:
-            st.warning("Файл 'Снимок экрана 2026-10-09 в 00.49.27.jpg' не найден в папке проекта.")
+            st.warning("Карта ветровых нагрузок не найдена в папке проекта.")
     with tab5:
-        if os.path.exists("Снимок экрана 2026-10-09 в 00.49.35.jpg"):
-            st.image("Снимок экрана 2026-10-09 в 00.49.35.jpg", use_container_width=True)
+        img = find_image("Снимок экрана 2026-10-09 в 00.49.35") or find_image("map_ice")
+        if img:
+            st.image(img, use_container_width=True)
         else:
-            st.warning("Файл 'Снимок экрана 2026-10-09 в 00.49.35.jpg' не найден в папке проекта.")
+            st.warning("Карта гололедных нагрузок не найдена в папке проекта.")
 
     st.markdown("### Ввод данных для расчета температур")
     col1, col2 = st.columns(2)
     with col1:
         st.session_state.product_type = st.radio("Тип транспортируемого продукта:", ["Нефть", "Газ"],
                                                  index=0 if st.session_state.product_type == "Нефть" else 1)
-        # Автоматическая подстановка температуры
         t_product_default = 5.0 if st.session_state.product_type == "Нефть" else 6.0
         t_product = st.number_input("Температура эксплуатации продукта (t_э), °C", value=t_product_default)
         t_max_map = st.number_input("Максимальная температура по карте (t_max), °C", value=30.0)
@@ -181,7 +214,6 @@ elif page == "2. Пример 8.2: Проверка прочности":
     with col2:
         check_dt = st.number_input("Расчетный темп. перепад Δt, °C", value=st.session_state.delta_t)
 
-    # Вычисления для текущей проверяемой толщины
     D_vn = st.session_state.D_H - 2 * check_delta
     sigma_kc_n = st.session_state.P * D_vn / (2 * check_delta)
     sigma_kc_allow = (st.session_state.m / (0.9 * st.session_state.k_H)) * st.session_state.R2_n
@@ -340,11 +372,10 @@ elif page == "3. Пример 8.3: Устойчивость прямого уч�
         st.markdown(f"<div class='error-block'>Устойчивость НЕ ОБЕСПЕЧЕНА: {S:.2f} МН > {S_allow:.2f} МН</div>",
                     unsafe_allow_html=True)
 
-# ОСТАЛЬНЫЕ ПРИМЕРЫ (8.4-8.7) АНАЛОГИЧНО ДОСТУПНЫ
-elif page == "4. Примеры 8.4 - 8.6: Устойчивость в насыпи":
-    st.title("Примеры 8.4 - 8.6. Устойчивость трубопровода в насыпи (болото)")
-    st.info("Раздел находится в разработке, логика расчетов аналогична 8.3.")
-
+# Заглушки для 4 и 5
+elif page == "4. Примеры 8.4-8.6: Устойчивость в насыпи":
+    st.title("Примеры 8.4 - 8.6. Устойчивость трубопровода в насыпи")
+    st.info("Раздел в разработке, аналогичен расчету 8.3.")
 elif page == "5. Пример 8.7: Продольные перемещения":
-    st.title("Пример 8.7. Продольные перемещения свободного конца")
-    st.info("Раздел находится в разработке, логика расчетов аналогична 8.3.")
+    st.title("Пример 8.7. Продольные перемещения")
+    st.info("Раздел в разработке.")

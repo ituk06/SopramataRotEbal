@@ -2,16 +2,17 @@ import streamlit as st
 import math
 import os
 import pandas as pd
+import plotly.express as px
 
 # --- НАСТРОЙКА СТРАНИЦЫ И СТИЛИ ---
-st.set_page_config(page_title="Сопромат Трубопроводов (Учебный комплекс)", page_icon="🛢️", layout="wide")
+st.set_page_config(page_title="Сопромат Трубопроводов (Учебный курс)", page_icon="🛢️", layout="wide")
 
 st.markdown("""
     <style>
     .math-block { background-color: #f8f9fa; padding: 15px; border-radius: 8px; border-left: 4px solid #4CAF50; font-family: 'Courier New', monospace; font-size: 1.1em; margin-bottom: 10px; overflow-x: auto;}
     .result-block { background-color: #e8f5e9; padding: 15px; border-radius: 8px; border-left: 4px solid #2e7d32; font-weight: bold; margin-bottom: 20px;}
     .error-block { background-color: #ffebee; padding: 15px; border-radius: 8px; border-left: 4px solid #d32f2f; color: #c62828; margin-bottom: 20px;}
-    .info-text { font-size: 1.05em; color: #34495E; margin-bottom: 10px; line-height: 1.6;}
+    .info-text { font-size: 1.05em; color: #34495E; margin-bottom: 15px; line-height: 1.6; background-color: #e3f2fd; padding: 10px; border-radius: 5px; border-left: 3px solid #1976d2;}
     </style>
 """, unsafe_allow_html=True)
 
@@ -19,21 +20,24 @@ st.markdown("""
 SORTAMENT = [4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 14.0, 15.7, 16.0, 17.5, 18.7, 19.1, 20.0, 21.0, 22.0, 23.0,
              24.0, 25.0, 26.0, 27.0, 28.0, 30.0, 32.0, 34.0, 36.0]
 
-# База климатических данных для интерактивной карты
+# Обширная база климатических данных (СНиП 23-01-99)
 CLIMATE_DATA = {
-    "г. Губкинский (ЯНАО)": {"t_min": -50.0, "t_max": 30.0, "lat": 64.434, "lon": 76.5026},
-    "г. Сургут (ХМАО)": {"t_min": -43.0, "t_max": 26.0, "lat": 61.25, "lon": 73.4167},
-    "г. Уфа (Башкортостан)": {"t_min": -35.0, "t_max": 28.0, "lat": 54.7388, "lon": 55.9721},
-    "г. Казань (Татарстан)": {"t_min": -32.0, "t_max": 30.0, "lat": 55.7903, "lon": 49.1204},
-    "г. Якутск": {"t_min": -54.0, "t_max": 30.0, "lat": 62.0339, "lon": 129.733},
-    "г. Оренбург": {"t_min": -31.0, "t_max": 30.0, "lat": 51.7666, "lon": 55.1005},
-    "г. Москва": {"t_min": -28.0, "t_max": 28.0, "lat": 55.7558, "lon": 37.6173},
-    "г. Новосибирск": {"t_min": -39.0, "t_max": 29.0, "lat": 55.0084, "lon": 82.9357},
-    "г. Иркутск": {"t_min": -36.0, "t_max": 28.0, "lat": 52.2978, "lon": 104.296},
-    "г. Владивосток": {"t_min": -24.0, "t_max": 27.0, "lat": 43.1198, "lon": 131.886},
-    "г. Норильск": {"t_min": -47.0, "t_max": 24.0, "lat": 69.3558, "lon": 88.1893},
-    "г. Тюмень": {"t_min": -35.0, "t_max": 27.0, "lat": 57.1522, "lon": 65.5272},
-    "г. Астрахань": {"t_min": -23.0, "t_max": 33.0, "lat": 46.3497, "lon": 48.0326},
+    "г. Губкинский (ЯНАО)": {"t_min": -50.0, "t_max": 30.0, "lat": 64.434, "lon": 76.5026, "snow": 5, "wind": 3},
+    "г. Сургут (ХМАО)": {"t_min": -43.0, "t_max": 26.0, "lat": 61.25, "lon": 73.4167, "snow": 4, "wind": 2},
+    "г. Уфа (Башкортостан)": {"t_min": -35.0, "t_max": 28.0, "lat": 54.7388, "lon": 55.9721, "snow": 5, "wind": 2},
+    "г. Казань (Татарстан)": {"t_min": -32.0, "t_max": 30.0, "lat": 55.7903, "lon": 49.1204, "snow": 4, "wind": 2},
+    "г. Якутск": {"t_min": -54.0, "t_max": 30.0, "lat": 62.0339, "lon": 129.733, "snow": 1, "wind": 1},
+    "г. Оренбург": {"t_min": -31.0, "t_max": 30.0, "lat": 51.7666, "lon": 55.1005, "snow": 3, "wind": 3},
+    "г. Москва": {"t_min": -28.0, "t_max": 28.0, "lat": 55.7558, "lon": 37.6173, "snow": 3, "wind": 1},
+    "г. Новосибирск": {"t_min": -39.0, "t_max": 29.0, "lat": 55.0084, "lon": 82.9357, "snow": 4, "wind": 3},
+    "г. Иркутск": {"t_min": -36.0, "t_max": 28.0, "lat": 52.2978, "lon": 104.296, "snow": 2, "wind": 3},
+    "г. Владивосток": {"t_min": -24.0, "t_max": 27.0, "lat": 43.1198, "lon": 131.886, "snow": 2, "wind": 4},
+    "г. Норильск": {"t_min": -47.0, "t_max": 24.0, "lat": 69.3558, "lon": 88.1893, "snow": 5, "wind": 4},
+    "г. Тюмень": {"t_min": -35.0, "t_max": 27.0, "lat": 57.1522, "lon": 65.5272, "snow": 3, "wind": 2},
+    "г. Астрахань": {"t_min": -23.0, "t_max": 33.0, "lat": 46.3497, "lon": 48.0326, "snow": 1, "wind": 3},
+    "г. Краснодар": {"t_min": -15.0, "t_max": 35.0, "lat": 45.0393, "lon": 38.9806, "snow": 2, "wind": 3},
+    "г. Мурманск": {"t_min": -28.0, "t_max": 20.0, "lat": 68.9585, "lon": 33.0827, "snow": 5, "wind": 5},
+    "г. Хабаровск": {"t_min": -30.0, "t_max": 28.0, "lat": 48.4814, "lon": 135.0721, "snow": 2, "wind": 3},
 }
 
 
@@ -62,18 +66,19 @@ if 'E' not in st.session_state: st.session_state.E = 206000.0
 if 'alpha' not in st.session_state: st.session_state.alpha = 0.000012
 if 'mu' not in st.session_state: st.session_state.mu = 0.3
 
-st.sidebar.title("🛢️ Навигация по расчету")
+st.sidebar.title("🛢️ Учебный комплекс")
+st.sidebar.markdown("Навигация по разделам РГР:")
 page = st.sidebar.radio("Выберите этап:", [
-    "1. Климатология (Интерактивная карта)",
-    "2. Пример 8.1: Толщина стенки",
-    "3. Пример 8.2: Проверка прочности",
-    "4. Пример 8.3: Продольная устойчивость",
-    "5. Примеры 8.4-8.6: Устойчивость в насыпи",
-    "6. Пример 8.7: Продольные перемещения"
+    "0. Климатология (Интерактивная карта)",
+    "1. Пример 8.1: Толщина стенки",
+    "2. Пример 8.2: Проверка прочности",
+    "3. Пример 8.3: Продольная устойчивость",
+    "4. Примеры 8.4-8.6: Устойчивость в насыпи",
+    "5. Пример 8.7: Продольные перемещения"
 ])
 
 st.sidebar.markdown("---")
-st.sidebar.info(f"**Текущая толщина стенки в памяти:**\n\nδ_н = {st.session_state.delta_n} мм")
+st.sidebar.info(f"**Толщина стенки в памяти:**\n\nδ_н = {st.session_state.delta_n} мм")
 
 
 def check_strength(delta, dt):
@@ -102,95 +107,114 @@ def find_image(base_name):
 
 
 # ==============================================================================
-# ЭТАП 1: КЛИМАТОЛОГИЯ
+# ЭТАП 0: КЛИМАТОЛОГИЯ (ИНТЕРАКТИВНАЯ КАРТА)
 # ==============================================================================
-if page == "1. Климатология (Интерактивная карта)":
-    st.title("1. Определение расчетного температурного перепада (Δt)")
+if page == "0. Климатология (Интерактивная карта)":
+    st.title("Определение расчетного температурного перепада (Δt)")
     st.markdown(
-        "<div class='info-text'>Температурный перепад $\Delta t$ — это разница между температурой эксплуатации и температурой, при которой трубу сваривали (замыкали) в траншее. Здесь вы можете выбрать регион, и программа подтянет климатические данные по СНиП 23-01-99.</div>",
+        "<div class='info-text'><b>Учебная справка:</b> Температурный перепад $\Delta t$ — это разница между температурой продукта внутри трубы и температурой замыкания (когда трубу сварили в траншее). Труба стремится расшириться от тепла или сжаться от холода, но грунт ей мешает. Из-за этого возникают колоссальные продольные напряжения, которые могут разорвать или выпучить трубу.</div>",
         unsafe_allow_html=True)
 
     col_map1, col_map2 = st.columns([1, 1])
     with col_map1:
         st.subheader("Выбор района строительства")
-        region = st.selectbox("Выберите город из базы (данные подставятся автоматически):",
-                              list(CLIMATE_DATA.keys()) + ["Задать вручную"])
+        region = st.selectbox("Выберите город из базы:", list(CLIMATE_DATA.keys()) + ["Задать вручную (Свой город)"])
 
-        # Интерактивная карта через встроенный st.map (работает всегда и без ошибок)
-        if region != "Задать вручную":
+        if region == "Задать вручную (Свой город)":
+            st.markdown("Впишите данные своего региона:")
+            col_c1, col_c2 = st.columns(2)
+            custom_name = col_c1.text_input("Название региона", value="Мой город")
+            custom_lat = col_c1.number_input("Широта (Lat)", value=55.0)
+            custom_lon = col_c2.number_input("Долгота (Lon)", value=55.0)
+            t_max_val = col_c2.number_input("Максимальная температура (t_max), °C", value=30.0)
+            t_min_val = col_c1.number_input("Минимальная температура (t_min), °C", value=-30.0)
+            custom_snow = col_c2.number_input("Снеговой район (1-8)", value=3, min_value=1, max_value=8)
+            custom_wind = col_c1.number_input("Ветровой район (1-7)", value=2, min_value=1, max_value=7)
+        else:
             t_max_val = CLIMATE_DATA[region]["t_max"]
             t_min_val = CLIMATE_DATA[region]["t_min"]
-            st.info(f"📍 **{region}**: t_min = {t_min_val}°C, t_max = {t_max_val}°C")
-
-            # Отображаем карту с маркером выбранного города
-            df_city = pd.DataFrame([{"lat": CLIMATE_DATA[region]["lat"], "lon": CLIMATE_DATA[region]["lon"]}])
-            st.map(df_city, zoom=3, size=20)
-        else:
-            t_max_val = 30.0
-            t_min_val = -50.0
-            # Если "Задать вручную", показываем карту России
-            st.map(pd.DataFrame([{"lat": 61.5, "lon": 105.3}]), zoom=2)
+            custom_snow = CLIMATE_DATA[region]["snow"]
+            custom_wind = CLIMATE_DATA[region]["wind"]
+            st.info(
+                f"📍 **{region}**: t_min = {t_min_val}°C, t_max = {t_max_val}°C, Снег: район {custom_snow}, Ветер: район {custom_wind}")
 
     with col_map2:
-        st.subheader("Оригинальные карты СНиП")
-        tab1, tab2, tab3, tab4, tab5 = st.tabs(["t_max", "t_min", "Снег", "Ветер", "Гололед"])
-        with tab1:
-            img = find_image("Снимок экрана 2026-10-09 в 00.49.04") or find_image("map_max")
-            if img:
-                st.image(img, use_container_width=True)
-            else:
-                st.warning("Файл карты t_max не найден.")
-        with tab2:
-            img = find_image("Снимок экрана 2026-10-09 в 00.49.13") or find_image("map_min")
-            if img: st.image(img, use_container_width=True)
-        with tab3:
-            img = find_image("Снимок экрана 2026-10-09 в 00.49.19") or find_image("map_snow")
-            if img: st.image(img, use_container_width=True)
-        with tab4:
-            img = find_image("Снимок экрана 2026-10-09 в 00.49.27") or find_image("map_wind")
-            if img: st.image(img, use_container_width=True)
-        with tab5:
-            img = find_image("Снимок экрана 2026-10-09 в 00.49.35") or find_image("map_ice")
-            if img: st.image(img, use_container_width=True)
+        st.subheader("Режимы интерактивной карты")
+        map_mode = st.radio("Отображение климатических зон:",
+                            ["Зимние температуры (t_min)", "Летние температуры (t_max)", "Снеговые районы",
+                             "Ветровые районы"],
+                            horizontal=True)
 
-    st.markdown("### Ввод данных для расчета температур")
-    col1, col2 = st.columns(2)
-    with col1:
+    # Подготовка данных для карты Plotly
+    df_map = pd.DataFrame.from_dict(CLIMATE_DATA, orient='index').reset_index()
+    df_map.rename(columns={'index': 'Город'}, inplace=True)
+    df_map['size'] = 15
+
+    if region == "Задать вручную (Свой город)":
+        custom_data = pd.DataFrame([{"Город": custom_name, "t_min": t_min_val, "t_max": t_max_val,
+                                     "lat": custom_lat, "lon": custom_lon, "snow": custom_snow, "wind": custom_wind,
+                                     "size": 15}])
+        df_map = pd.concat([df_map, custom_data], ignore_index=True)
+
+    if map_mode == "Зимние температуры (t_min)":
+        color_col, color_scale, title = "t_min", "ice", "Тепловая зона: Минимальные температуры (Холоднее = Темнее синий)"
+    elif map_mode == "Летние температуры (t_max)":
+        color_col, color_scale, title = "t_max", "inferno", "Тепловая зона: Максимальные температуры (Жарче = Желтый/Красный)"
+    elif map_mode == "Снеговые районы":
+        color_col, color_scale, title = "snow", "Blues", "Снеговые районы (Интенсивность осадков)"
+    else:
+        color_col, color_scale, title = "wind", "Viridis", "Ветровые районы (Ветровая нагрузка)"
+
+    fig = px.scatter_mapbox(df_map, lat="lat", lon="lon", hover_name="Город",
+                            hover_data={"t_min": True, "t_max": True, "snow": True, "wind": True, "lat": False,
+                                        "lon": False, "size": False},
+                            color=color_col, color_continuous_scale=color_scale,
+                            size="size", zoom=2.5, opacity=0.8, mapbox_style="carto-positron", title=title)
+    st.plotly_chart(fig, use_container_width=True)
+
+    st.markdown("### Расчет температур замыкания")
+    col3, col4 = st.columns(2)
+    with col3:
         st.session_state.product_type = st.radio("Тип транспортируемого продукта:", ["Нефть", "Газ"],
                                                  index=0 if st.session_state.product_type == "Нефть" else 1)
-        t_product_default = 5.0 if st.session_state.product_type == "Нефть" else 6.0
         st.session_state.t_product = st.number_input("Температура эксплуатации продукта (t_э), °C",
-                                                     value=t_product_default)
-        t_max_map = st.number_input("Максимальная температура (t_max), °C", value=t_max_val)
-        t_min_map = st.number_input("Минимальная температура (t_min), °C", value=t_min_val)
+                                                     value=5.0 if st.session_state.product_type == "Нефть" else 6.0)
 
-    with col2:
+    with col4:
         st.markdown(
-            "<div class='info-text'><b>Логика расчета:</b> При отсутствии точных данных о дате сварки стыков, нормативная температура замыкания берется с запасом: летом на 3°C выше максимума ($t_m$), зимой на 6°C ниже минимума ($t_x$).</div>",
+            "<div class='info-text'><b>Логика:</b> При отсутствии точных данных о дате сварки стыков, берем наихудший сценарий. Летом: температура воздуха + 3°C (нагрев трубы солнцем). Зимой: температура воздуха - 6°C (охлаждение металла).</div>",
             unsafe_allow_html=True)
-        t_x = t_min_map - 6.0
-        t_m = t_max_map + 3.0
+        t_x = t_min_val - 6.0
+        t_m = t_max_val + 3.0
         dt_x = st.session_state.t_product - t_x
         dt_m = st.session_state.t_product - t_m
         calc_dt = max(abs(dt_x), abs(dt_m))
 
-        st.latex(rf"t_x = t_{{min}} - 6^\circ C = {t_min_map} - 6 = \mathbf{{{t_x}^\circ C}} \text{{ (Зима)}}")
-        st.latex(rf"t_m = t_{{max}} + 3^\circ C = {t_max_map} + 3 = \mathbf{{{t_m}^\circ C}} \text{{ (Лето)}}")
+        st.latex(
+            rf"t_x = t_{{min}} - 6^\circ C = {t_min_val} - 6 = \mathbf{{{t_x}^\circ C}} \text{{ (Замыкание зимой)}}")
+        st.latex(
+            rf"t_m = t_{{max}} + 3^\circ C = {t_max_val} + 3 = \mathbf{{{t_m}^\circ C}} \text{{ (Замыкание летом)}}")
         st.latex(rf"\Delta t_x = t_{{э}} - t_x = {st.session_state.t_product} - ({t_x}) = \mathbf{{{dt_x}^\circ C}}")
         st.latex(rf"\Delta t_m = t_{{э}} - t_m = {st.session_state.t_product} - ({t_m}) = \mathbf{{{dt_m}^\circ C}}")
 
         st.success(f"**Расчетный (наихудший) температурный перепад:** Δt = **{calc_dt} °C**")
         if st.button("Сохранить Δt"):
             st.session_state.delta_t = calc_dt
-            st.success("Перепад температур успешно сохранен!")
+            st.success("Перепад сохранен! Переходите к Этапу 1.")
+
+    with st.expander("Посмотреть оригинальные карты из СНиП"):
+        img = find_image("Снимок экрана 2026-10-09 в 00.49.04") or find_image("map_max")
+        if img: st.image(img, caption="Карта максимальных температур", use_container_width=True)
+        img2 = find_image("Снимок экрана 2026-10-09 в 00.49.13") or find_image("map_min")
+        if img2: st.image(img2, caption="Карта минимальных температур", use_container_width=True)
 
 # ==============================================================================
-# ЭТАП 2: ТОЛЩИНА СТЕНКИ
+# ЭТАП 1: ТОЛЩИНА СТЕНКИ
 # ==============================================================================
-elif page == "2. Пример 8.1: Толщина стенки":
+elif page == "1. Пример 8.1: Толщина стенки":
     st.title("Пример 8.1. Определение расчетной толщины стенки")
     st.markdown(
-        "<div class='info-text'>Здесь мы определяем минимально необходимую толщину стенки трубы по безмоментной теории оболочек (формула котла) от воздействия только внутреннего давления продукта. Это базовая величина, которую мы затем будем проверять на продольные напряжения.</div>",
+        "<div class='info-text'><b>Учебная справка:</b> Здесь определяется минимально необходимая толщина стенки трубы по безмоментной теории оболочек. Эта толщина рассчитывается только на <b>внутреннее давление продукта</b> (распирание). Затем мы берем ближайшую стандартную толщину по ГОСТ. Эта базовая толщина позже будет проверяться на температурные перепады.</div>",
         unsafe_allow_html=True)
 
     col1, col2, col3 = st.columns(3)
@@ -211,25 +235,23 @@ elif page == "2. Пример 8.1: Толщина стенки":
     R2 = (st.session_state.R2_n * st.session_state.m) / (st.session_state.k2 * st.session_state.k_H)
     delta_calc = (n_p * st.session_state.P * st.session_state.D_H) / (2 * (R1 + n_p * st.session_state.P))
 
-    delta_nom = get_next_thickness(delta_calc, min_thickness=12.0 if st.session_state.D_H >= 1000 else 4.0)
+    min_req_thickness = 12.0 if st.session_state.D_H >= 1000 else 4.0
+    delta_nom = get_next_thickness(delta_calc, min_thickness=min_req_thickness)
 
     st.markdown("### Пошаговый расчет с пояснениями")
-    st.markdown(
-        "<div class='info-text'>1. Находим расчетные сопротивления материала труб $R_1$ (по пределу прочности) и $R_2$ (по пределу текучести). Для этого нормативные значения умножаем на коэффициент условий работы $m$ и делим на коэффициенты надежности.</div>",
-        unsafe_allow_html=True)
+    st.write(
+        "1. Находим расчетные сопротивления материала труб $R_1$ (по пределу прочности) и $R_2$ (по пределу текучести):")
     st.latex(
         rf"R_1 = \frac{{R_1^н \cdot m}}{{k_1 \cdot k_н}} = \frac{{{st.session_state.R1_n} \cdot {st.session_state.m}}}{{{st.session_state.k1} \cdot {st.session_state.k_H}}} = \mathbf{{{R1:.2f} \text{{ МПа}}}}")
     st.latex(
         rf"R_2 = \frac{{R_2^н \cdot m}}{{k_2 \cdot k_н}} = \frac{{{st.session_state.R2_n} \cdot {st.session_state.m}}}{{{st.session_state.k2} \cdot {st.session_state.k_H}}} = \mathbf{{{R2:.2f} \text{{ МПа}}}}")
 
-    st.markdown(
-        "<div class='info-text'>2. Определяем расчетную толщину стенки $\delta$. Это чисто теоретическое значение.</div>",
-        unsafe_allow_html=True)
+    st.write("2. Определяем расчетную (теоретическую) толщину стенки:")
     st.latex(
         rf"\delta = \frac{{n_p \cdot p \cdot D_н}}{{2(R_1 + n_p \cdot p)}} = \frac{{{n_p} \cdot {st.session_state.P} \cdot {st.session_state.D_H}}}{{2({R1:.2f} + {n_p} \cdot {st.session_state.P})}} = \mathbf{{{delta_calc:.2f} \text{{ мм}}}}")
 
     st.markdown(
-        f"<div class='result-block'>3. Согласно требованиям, округляем полученное значение в большую сторону до ближайшего по ГОСТ/ТУ. Для труб $D_N \ge 1000$ мм толщина не может быть меньше 12 мм.<br><br><b>Принятая предварительная толщина стенки: δ_н = {delta_nom:.1f} мм</b></div>",
+        f"<div class='result-block'>3. Округляем в большую сторону до стандартного значения по ГОСТ. (Для труб $D_N \ge 1000$ мм толщина не может быть меньше 12 мм).<br><br><b>Принятая предварительная толщина стенки: δ_н = {delta_nom:.1f} мм</b></div>",
         unsafe_allow_html=True)
 
     if st.button("Сохранить и перейти к проверке прочности"):
@@ -237,15 +259,16 @@ elif page == "2. Пример 8.1: Толщина стенки":
         st.rerun()
 
 # ==============================================================================
-# ЭТАП 3: ПРОВЕРКА ПРОЧНОСТИ
+# ЭТАП 2: ПРОВЕРКА ПРОЧНОСТИ (ОБЪЕДИНЕННАЯ)
 # ==============================================================================
-elif page == "3. Пример 8.2: Проверка прочности":
+elif page == "2. Пример 8.2: Проверка прочности":
     st.title("Пример 8.2. Проверка прочности трубопровода")
     st.markdown(
-        "<div class='info-text'>Подземный трубопровод зажат в грунте. При изменении температуры металла или давления он стремится изменить свою длину, но грунт ему не дает. Из-за этого в трубе возникают огромные <b>продольные напряжения</b>. В этом разделе мы проверяем, выдержит ли металл совместное воздействие кольцевых (распирающих) и продольных напряжений.</div>",
+        "<div class='info-text'><b>Учебная справка:</b> Трубопровод защемлен грунтом. При охлаждении он хочет сжаться, но грунт держит его, вызывая <b>продольные растягивающие напряжения</b>. При нагреве он расширяется, вызывая <b>сжимающие напряжения</b>. Сжатие наиболее опасно, так как может привести к местной потере устойчивости (гофрам). Здесь мы проверяем, выдержит ли металл совместное действие кольцевых и продольных напряжений.</div>",
         unsafe_allow_html=True)
 
-    tab_manual, tab_auto = st.tabs(["🖐️ Ручная проверка (Один расчет)", "🚀 Итерационный Автоподбор"])
+    tab_manual, tab_auto = st.tabs(
+        ["🖐️ Ручная проверка (для текущей толщины)", "🚀 Итерационный Автоподбор (Умный алгоритм)"])
 
     # --- РУЧНАЯ ПРОВЕРКА ---
     with tab_manual:
@@ -260,9 +283,7 @@ elif page == "3. Пример 8.2: Проверка прочности":
         is_ok, sig_kc, sig_kc_allow, sig_pr, psi, sig_pr_allow = check_strength(check_delta, check_dt)
         D_vn = st.session_state.D_H - 2 * check_delta
 
-        st.markdown(
-            "<div class='info-text'><b>1. Кольцевые напряжения от нормативного давления:</b><br>Это напряжения, которые растягивают трубу по кругу. Они не должны превышать допускаемое значение.</div>",
-            unsafe_allow_html=True)
+        st.write("1. Кольцевые напряжения (распирание от давления):")
         st.latex(
             rf"\sigma_{{кц}}^н = \frac{{p \cdot D_{{вн}}}}{{2\delta_н}} = \frac{{{st.session_state.P} \cdot {D_vn}}}{{2 \cdot {check_delta}}} = \mathbf{{{sig_kc:.2f} \text{{ МПа}}}}")
         st.latex(
@@ -277,15 +298,11 @@ elif page == "3. Пример 8.2: Проверка прочности":
                 f"**Условие 3.21 ($\sigma_{{кц}}^н \le [\sigma_{{кц}}]$):** <span style='color:red'>НЕ ВЫПОЛНЯЕТСЯ ❌ (FALSE)</span>",
                 unsafe_allow_html=True)
 
-        st.markdown(
-            "<div class='info-text'><b>2. Продольные напряжения от нормативных нагрузок:</b><br>Здесь учитывается температурный перепад $\Delta t$ и эффект Пуассона $\mu$ от кольцевых напряжений.</div>",
-            unsafe_allow_html=True)
+        st.write("2. Продольные напряжения (температура + эффект Пуассона):")
         st.latex(
             rf"\sigma_{{пр}}^н = -\alpha \cdot E \cdot \Delta t + \mu \cdot \sigma_{{кц}}^н = -{st.session_state.alpha} \cdot {st.session_state.E} \cdot {check_dt} + {st.session_state.mu} \cdot {sig_kc:.2f} = \mathbf{{{sig_pr:.2f} \text{{ МПа}}}}")
 
-        st.markdown(
-            "<div class='info-text'><b>3. Учет двухосного напряженного состояния:</b><br>Поскольку труба испытывает сжатие ($\sigma_{{пр}}^н < 0$), прочность металла снижается. Это учитывается коэффициентом $\psi_1$.</div>",
-            unsafe_allow_html=True)
+        st.write("3. Учет двухосного напряженного состояния (поправка $\psi_1$ на сжатие):")
         st.latex(
             rf"\psi_1 = \sqrt{{1 - 0.75 \left(\frac{{\sigma_{{кц}}^н}}{{[\sigma_{{кц}}]}}\right)^2}} - 0.5 \left(\frac{{\sigma_{{кц}}^н}}{{[\sigma_{{кц}}]}}\right) = \sqrt{{1 - 0.75 \left(\frac{{{sig_kc:.2f}}}{{{sig_kc_allow:.2f}}}\right)^2}} - 0.5 \left(\frac{{{sig_kc:.2f}}}{{{sig_kc_allow:.2f}}}\right) = \mathbf{{{psi:.4f}}}")
         st.latex(
@@ -300,21 +317,27 @@ elif page == "3. Пример 8.2: Проверка прочности":
                 f"**Условие 3.20 ($|\sigma_{{пр}}^н| \le [\sigma_{{пр}}]$):** <span style='color:red'>НЕ ВЫПОЛНЯЕТСЯ ❌ (FALSE)</span>",
                 unsafe_allow_html=True)
 
-        st.markdown("---")
-
         if is_ok:
             st.success(f"Прочность обеспечена! Рекомендуемая толщина стенки: {check_delta} мм.")
+
+            rho_min = 1000 * (D_vn / 1000)
+            st.write("---")
+            st.write("4. Минимальный радиус упругого изгиба для прохода СОД:")
+            st.latex(
+                rf"\rho_{{min}} = 1000 \cdot D_{{вн}} = 1000 \cdot {D_vn / 1000:.3f} = \mathbf{{{rho_min:.1f} \text{{ м}}}}")
+
             if st.button("Зафиксировать эту толщину для следующих расчетов"):
                 st.session_state.delta_n = check_delta
                 st.rerun()
         else:
-            st.error(f"При толщине {check_delta} мм труба не выдерживает нагрузок. Требуется увеличить толщину.")
+            st.error(
+                f"При толщине {check_delta} мм труба не выдержит продольных нагрузок. Попробуйте вкладку «Автоподбор».")
 
     # --- АВТОПОДБОР ---
     with tab_auto:
         st.subheader("Итерационный автоподбор толщины стенки")
         st.markdown(
-            "<div class='info-text'>Если при первичной толщине труба не выдерживает продольных напряжений, алгоритм автоматически начнет перебирать стандартные толщины по ГОСТ в сторону увеличения, пока оба условия не станут <b>TRUE</b>.</div>",
+            "<div class='info-text'>Если при текущей толщине труба не проходит проверку, алгоритм автоматически начнет перебирать стандартные толщины по ГОСТ в сторону увеличения, пока оба условия не станут <b>TRUE</b>.</div>",
             unsafe_allow_html=True)
 
         if st.button("🚀 Запустить алгоритм автоподбора"):
@@ -341,25 +364,25 @@ elif page == "3. Пример 8.2: Проверка прочности":
                     D_vn_m = (st.session_state.D_H - 2 * current_delta) / 1000
                     rho_min = 1000 * D_vn_m
                     st.markdown(
-                        "<div class='info-text'>Согласно п.8.3, минимальный радиус упругого изгиба трубопровода из условия беспрепятственного прохождения внутритрубных очистных устройств (СОД) должен составлять не менее 1000 внутренних диаметров трубы ($\rho_{min} = 1000 \cdot D_{вн}$).</div>",
+                        "<div class='info-text'>Согласно п.8.3, минимальный радиус упругого изгиба трубопровода из условия беспрепятственного прохождения внутритрубных очистных устройств (СОД) должен составлять не менее 1000 внутренних диаметров трубы.</div>",
                         unsafe_allow_html=True)
                     st.latex(
                         rf"\rho_{{min}} = 1000 \cdot D_{{вн}} = 1000 \cdot {D_vn_m:.3f} = \mathbf{{{rho_min:.1f} \text{{ м}}}}")
                     break
                 else:
                     st.warning(
-                        f"Условие не выполнилось для {current_delta} мм. Берем следующую толщину по сортаменту...")
+                        f"Условие не выполнилось для {current_delta} мм. Проверяем следующую толщину по сортаменту...")
                     current_delta = get_next_thickness(current_delta + 0.1)
                     iteration += 1
 
 # ==============================================================================
-# ЭТАП 4: УСТОЙЧИВОСТЬ ПРЯМОГО УЧАСТКА
+# ЭТАП 3: УСТОЙЧИВОСТЬ ПРЯМОГО УЧАСТКА
 # ==============================================================================
-elif page == "4. Пример 8.3: Продольная устойчивость":
+elif page == "3. Пример 8.3: Устойчивость прямого участка":
     st.title("Пример 8.3. Расчет продольной устойчивости (Прямой участок)")
     st.info(f"**Используется окончательная толщина стенки:** δ_н = {st.session_state.delta_n} мм")
     st.markdown(
-        "<div class='info-text'>Подземный трубопровод, сжатый продольными силами от температуры и давления, может потерять устойчивость (выпучиться из земли вверх), если вес засыпающего его грунта окажется недостаточным. Здесь мы определяем, выдержит ли труба это воздействие.</div>",
+        "<div class='info-text'><b>Учебная справка:</b> Сжатая продольными силами труба может потерять устойчивость (изогнуться дугой и выскочить из земли). Засыпка сверху ($q_в$) и сопротивление сдвигу в грунте ($p_0$) удерживают ее. На этом этапе мы проверяем, достаточно ли веса засыпки.</div>",
         unsafe_allow_html=True)
 
     col1, col2 = st.columns(2)
@@ -399,7 +422,8 @@ elif page == "4. Пример 8.3: Продольная устойчивость
 
     st.markdown("### Подробный расчет с пояснениями")
 
-    st.write("1. Вычисление геометрических характеристик сечения трубы:")
+    st.write(
+        "1. Геометрические характеристики поперечного сечения (считаем площадь и момент инерции металлического кольца):")
     st.latex(
         rf"F = \frac{{\pi \cdot (D_н^2 - D_{{вн}}^2)}}{{4}} = \frac{{3.1416 \cdot ({D_H_m}^2 - {D_vn_m:.3f}^2)}}{{4}} = \mathbf{{{F:.4f} \text{{ м}}^2}}")
     st.latex(
@@ -409,13 +433,11 @@ elif page == "4. Пример 8.3: Продольная устойчивость
     st.latex(
         rf"q_{{тр}} = q_{{мет}} + q_{{прод}} + q_{{из}} = {q_met:.0f} + {q_prod:.0f} + {q_ins:.0f} = \mathbf{{{q_tr:.0f} \text{{ Н/м}}}}")
 
-    st.write("3. Определение эквивалентного продольного сжимающего усилия $S$:")
-    st.markdown("<div class='info-text'>Это та самая сила, которая пытается вытолкнуть трубу наружу.</div>",
-                unsafe_allow_html=True)
+    st.write("3. Определение эквивалентного продольного сжимающего усилия $S$ (вызывает продольный изгиб):")
     st.latex(
         rf"S = [(0.5 - \mu)\sigma_{{кц}} + \alpha E \Delta t] \cdot F = [(0.5 - 0.3) \cdot {sigma_kc:.2f} + {st.session_state.alpha} \cdot {st.session_state.E} \cdot {st.session_state.delta_t}] \cdot {F:.4f} = \mathbf{{{S:.2f} \text{{ МН}}}}")
 
-    st.write("4. Давление грунта и сопротивления (жесткопластичная модель сдвига):")
+    st.write("4. Давление грунта и сопротивления (модель Прандтля-Кулона):")
     st.latex(
         rf"p_{{гр}} = \frac{{0.8 \cdot \gamma_{{гр}} \cdot (h_0 + D_{{н.и}}/2 - \pi D_{{н.и}}/8) + q_{{тр}}}}{{D_{{н.и}}}} = \frac{{0.8 \cdot {gamma_gr} \cdot ({h0} + {D_ins_m / 2:.3f} - \pi \cdot {D_ins_m}/8) + {q_tr:.0f}}}{{{D_ins_m}}} = \mathbf{{{p_gr:.0f} \text{{ Па}}}}")
     st.latex(
@@ -425,7 +447,7 @@ elif page == "4. Пример 8.3: Продольная устойчивость
     st.latex(
         rf"q_в = \frac{{0.8 \cdot \gamma_{{гр}} \cdot D_{{н.и}} \cdot (h_0 + D_{{н.и}}/2 - \pi D_{{н.и}}/8) + q_{{тр}}}}{{10^6}} = \mathbf{{{q_v:.4f} \text{{ МН/м}}}}")
 
-    st.write("5. Вычисление критической силы выпучивания $N_{кр}$:")
+    st.write("5. Вычисление критической силы (наступление потери устойчивости):")
     st.latex(
         rf"N_{{кр}} = 4.09 \cdot \sqrt{{p_0 \cdot q_в \cdot F \cdot E \cdot I}} = 4.09 \cdot \sqrt{{{p0:.4f} \cdot {q_v:.4f} \cdot {F:.4f} \cdot {st.session_state.E} \cdot {I:.6f}}} = \mathbf{{{N_cr_plast:.2f} \text{{ МН}}}}")
 
@@ -440,16 +462,16 @@ elif page == "4. Пример 8.3: Продольная устойчивость
             unsafe_allow_html=True)
     else:
         st.markdown(
-            f"<div class='error-block'>Условие не выполняется: {S:.2f} МН > {S_allow:.2f} МН. <br>Устойчивость НЕ ОБЕСПЕЧЕНА. Требуется увеличить глубину заложения $h_0$ или выполнить балластировку (пригрузы).</div>",
+            f"<div class='error-block'>Условие не выполняется: {S:.2f} МН > {S_allow:.2f} МН. <br>Устойчивость НЕ ОБЕСПЕЧЕНА. Требуется увеличить глубину заложения $h_0$ или применить утяжелители.</div>",
             unsafe_allow_html=True)
 
 # ==============================================================================
-# ЭТАП 5: УСТОЙЧИВОСТЬ В НАСЫПИ
+# ЭТАП 4: УСТОЙЧИВОСТЬ В НАСЫПИ
 # ==============================================================================
-elif page == "5. Примеры 8.4-8.6: Устойчивость в насыпи":
+elif page == "4. Примеры 8.4-8.6: Устойчивость в насыпи":
     st.title("Примеры 8.4 - 8.6. Устойчивость трубопровода в насыпи (болото)")
     st.markdown(
-        "<div class='info-text'>В данном разделе выполняется комплексная проверка трубопровода, уложенного в наземную насыпь (часто применяется на болотах). Проверяется прямой участок на продольное выпучивание, а также криволинейные участки (повороты) на сдвиг в бок и вверх.</div>",
+        "<div class='info-text'><b>Учебная справка:</b> При прокладке в наземной насыпи (на болотах) устойчивость зависит от геометрии самой насыпи. Здесь проверяются сразу три сценария: 1) прямолинейный участок (сжатие), 2) поворот по горизонтали (попытка трубы 'распрямиться' и сдвинуть насыпь в бок), 3) поворот по вертикали (выпучивание вверх через тонкий слой засыпки).</div>",
         unsafe_allow_html=True)
 
     col1, col2, col3 = st.columns(3)
@@ -479,7 +501,7 @@ elif page == "5. Примеры 8.4-8.6: Устойчивость в насып�
 
     st.subheader("1. Прямолинейный участок в насыпи (Пример 8.4)")
     st.markdown(
-        "<div class='info-text'>Критическая сила для насыпи считается с учетом бокового отпора грунта отвалов $q_{гор}$.</div>",
+        "<div class='info-text'>Продольное критическое усилие для насыпи считается с учетом бокового отпора грунта отвалов $q_{гор}$ (пассивное сопротивление грунта).</div>",
         unsafe_allow_html=True)
     p_gr = (0.8 * gamma_gr * (h0 + D_H_m / 2 - math.pi * D_H_m / 8) + q_tr) / D_H_m
     tau_pr = p_gr * math.tan(math.radians(phi_deg))
@@ -490,13 +512,13 @@ elif page == "5. Примеры 8.4-8.6: Устойчивость в насып�
         rf"N_{{кр}} = 3.97 \cdot \sqrt{{p_0 \cdot q_{{гор}} \cdot F \cdot E \cdot I}} = \mathbf{{{N_cr_nas:.2f} \text{{ МН}}}}")
     if S <= (st.session_state.m / 1.1) * N_cr_nas:
         st.success(
-            f"Устойчивость прямого участка в насыпи обеспечена (S = {S:.2f} МН ≤ {(st.session_state.m / 1.1) * N_cr_nas:.2f} МН)")
+            f"Устойчивость прямого участка в насыпи ОБЕСПЕЧЕНА (S = {S:.2f} МН ≤ {(st.session_state.m / 1.1) * N_cr_nas:.2f} МН)")
     else:
         st.error("Устойчивость прямого участка в насыпи НЕ обеспечена")
 
     st.subheader("2. Устойчивость на горизонтальном повороте (Пример 8.5)")
     st.markdown(
-        "<div class='info-text'>Труба, изогнутая в горизонтальной плоскости, под давлением пытается выпрямиться и сдвинуть насыпь вбок. Проверяем, удержит ли грунт трубу.</div>",
+        "<div class='info-text'>Труба, изогнутая в горизонтальной плоскости, под давлением пытается выпрямиться. Возникает сдвигающая сила, направленная наружу кривой. Проверяем, удержит ли берма насыпи трубу от сдвига.</div>",
         unsafe_allow_html=True)
     q_sdv = 40.47  # Условно
     req_q = 1.25 * S / rho_gor
@@ -504,13 +526,13 @@ elif page == "5. Примеры 8.4-8.6: Устойчивость в насып�
         rf"q_{{треб}} = \frac{{1.25 \cdot S}}{{\rho}} = \frac{{1.25 \cdot {S:.2f}}}{{{rho_gor}}} = \mathbf{{{req_q * 1000:.2f} \text{{ кН/м}}}}")
     if q_sdv >= req_q:
         st.success(
-            f"Устойчивость поворота обеспечена (Фактическое сопротивление грунта сдвигу {q_sdv * 1000:.2f} кН/м > {req_q * 1000:.2f} кН/м)")
+            f"Устойчивость поворота ОБЕСПЕЧЕНА (Фактическое сопротивление грунта сдвигу {q_sdv * 1000:.2f} кН/м > {req_q * 1000:.2f} кН/м)")
     else:
         st.error("Устойчивость горизонтального поворота НЕ обеспечена")
 
     st.subheader("3. Устойчивость на вертикальном повороте (Пример 8.6)")
     st.markdown(
-        "<div class='info-text'>Труба, изогнутая вверх (например, на перегибе рельефа), под давлением пытается выскочить из траншеи вверх.</div>",
+        "<div class='info-text'>Труба, изогнутая выпуклостью вверх (например, на перегибе рельефа), под давлением пытается распрямиться и выскочить из траншеи вверх. Единственное, что ее держит — вес грунта засыпки.</div>",
         unsafe_allow_html=True)
     q_v = (0.8 * gamma_gr * D_H_m * (h0 + D_H_m / 2 - math.pi * D_H_m / 8) + q_tr) / 1e6
     k_alpha = math.sin(math.radians(alpha_v / 2)) + math.cos(math.radians(alpha_v / 2)) if alpha_v > 45 else 1.0
@@ -519,17 +541,17 @@ elif page == "5. Примеры 8.4-8.6: Устойчивость в насып�
         rf"q_{{в\_треб}} = \frac{{1.25 \cdot S \cdot k_\alpha}}{{\rho}} = \mathbf{{{req_q_v * 1000:.2f} \text{{ кН/м}}}}")
     if q_v >= req_q_v:
         st.success(
-            f"Устойчивость вертикального поворота (выпуклостью вверх) обеспечена. Веса грунта q_в = {q_v * 1000:.2f} кН/м достаточно.")
+            f"Устойчивость вертикального поворота ОБЕСПЕЧЕНА. Веса грунта над трубой (q_в = {q_v * 1000:.2f} кН/м) достаточно для удержания.")
     else:
         st.error("Труба 'выскочит' из насыпи вверх. Увеличьте радиус поворота или вес засыпки.")
 
 # ==============================================================================
-# ЭТАП 6: ПРОДОЛЬНЫЕ ПЕРЕМЕЩЕНИЯ
+# ЭТАП 5: ПРОДОЛЬНЫЕ ПЕРЕМЕЩЕНИЯ
 # ==============================================================================
-elif page == "6. Пример 8.7: Продольные перемещения":
+elif page == "5. Пример 8.7: Продольные перемещения":
     st.title("Пример 8.7. Продольные перемещения свободного конца")
     st.markdown(
-        "<div class='info-text'>Расчет позволяет определить, насколько трубопровод сдвинется в продольном направлении (например, при выходе на поверхность к крановому узлу или на надземном переходе) из-за температурного расширения и давления.</div>",
+        "<div class='info-text'><b>Учебная справка:</b> Этот расчет позволяет определить, насколько трубопровод сдвинется в продольном направлении из-за температурного расширения и давления. Это критически важно в местах, где труба выходит на поверхность (к крановому узлу или на надземном переходе), чтобы не оторвало арматуру.</div>",
         unsafe_allow_html=True)
 
     col1, col2 = st.columns(2)
@@ -540,7 +562,6 @@ elif page == "6. Пример 8.7: Продольные перемещения":
         gamma_gr = st.number_input("Удельный вес грунта γ_гр, Н/м³", value=16000.0)
         h0 = st.number_input("Глубина заложения h0, м", value=1.0)
 
-    # Подтягиваем геометрию
     D_H_m = st.session_state.D_H / 1000
     delta_m = st.session_state.delta_n / 1000
     D_vn_m = D_H_m - 2 * delta_m
@@ -562,26 +583,30 @@ elif page == "6. Пример 8.7: Продольные перемещения":
 
     st.markdown("### Вычисления")
     st.write("1. Предельные касательные напряжения и эквивалентное усилие:")
-    st.latex(rf"\tau_{{пр}} = \mathbf{{{tau_pr * 1e6:.0f} \text{{ Па}}}} \quad S = \mathbf{{{S:.2f} \text{{ МН}}}}")
+    st.latex(
+        rf"\tau_{{пр}} = p_{{гр}} \cdot \tan(\varphi) = \mathbf{{{tau_pr * 1e6:.0f} \text{{ Па}}}} \quad S = \mathbf{{{S:.2f} \text{{ МН}}}}")
 
-    st.write("2. Коэффициент затухания и предельное удерживающее усилие грунта:")
+    st.write("2. Коэффициент затухания (жесткость) и предельное удерживающее усилие грунта:")
     st.latex(rf"\beta = \sqrt{{\frac{{\pi \cdot D_н \cdot k_и}}{{E \cdot F}}}} = \mathbf{{{beta:.4f} \text{{ 1/м}}}}")
     st.latex(rf"P_{{пр}} = \frac{{\tau_{{пр}} \cdot \pi \cdot D_н}}{{\beta}} = \mathbf{{{P_pr:.3f} \text{{ МН}}}}")
 
     if S > P_pr:
         st.markdown(
-            "<div class='error-block'>Усилие S > P_пр. Связь трубы с грунтом нарушена (срыв). Формируется участок пластичной связи (проскальзывание).</div>",
+            "<div class='error-block'>Усилие S > P_пр. Связь трубы с грунтом нарушена. Труба начинает скользить в грунте (формируется участок пластичной связи).</div>",
             unsafe_allow_html=True)
         p0 = math.pi * D_H_m * tau_pr
         l2 = (S - P_pr) / p0
         l1 = 3.5 / beta
         u_end = (tau_pr / k_i) + ((S ** 2 - P_pr ** 2) / (2 * math.pi * D_H_m * tau_pr * st.session_state.E * F))
 
-        st.write("3. Длины зон деформации и перемещение:")
-        st.latex(rf"l_1 \text{{ (упругая зона)}} = 3.5 / \beta = \mathbf{{{l1:.1f} \text{{ м}}}}")
-        st.latex(rf"l_2 \text{{ (зона скольжения)}} = (S - P_{{пр}}) / p_0 = \mathbf{{{l2:.1f} \text{{ м}}}}")
-        st.markdown(f"<div class='result-block'>Полное перемещение свободного конца: u = {u_end * 1000:.1f} мм</div>",
-                    unsafe_allow_html=True)
+        st.write("3. Длины зон деформации и перемещение свободного конца:")
+        st.latex(rf"l_1 \text{{ (длина упругой зоны)}} = 3.5 / \beta = \mathbf{{{l1:.1f} \text{{ м}}}}")
+        st.latex(
+            rf"l_2 \text{{ (длина зоны скольжения)}} = \frac{{S - P_{{пр}}}}{{p_0}} = \mathbf{{{l2:.1f} \text{{ м}}}}")
+        st.markdown(
+            f"<div class='result-block'>Полное перемещение свободного конца трубопровода: u = {u_end * 1000:.1f} мм</div>",
+            unsafe_allow_html=True)
     else:
-        st.markdown("<div class='result-block'>Связь трубы с грунтом полностью упругая (S ≤ P_пр). Сдвигов нет.</div>",
-                    unsafe_allow_html=True)
+        st.markdown(
+            "<div class='result-block'>Связь трубы с грунтом полностью упругая (S ≤ P_пр). Трубопровод не проскальзывает.</div>",
+            unsafe_allow_html=True)

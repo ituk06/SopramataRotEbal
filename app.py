@@ -72,7 +72,7 @@ if 'E' not in st.session_state: st.session_state.E = 206000.0
 if 'alpha' not in st.session_state: st.session_state.alpha = 0.000012
 if 'mu' not in st.session_state: st.session_state.mu = 0.3
 
-st.sidebar.title(" 🛢️ Учебный комплекс")
+st.sidebar.title("🛢 Учебный комплекс")
 st.sidebar.markdown("Навигация по разделам РГР:")
 page = st.sidebar.radio("Выберите этап:", [
     "1. Климатология (Интерактивная зона)",

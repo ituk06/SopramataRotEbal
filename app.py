@@ -10,7 +10,7 @@ st.set_page_config(page_title="Сопромат Трубопроводов (Уч
 
 st.markdown("""
     <style>
-    .math-block { background-color: #f8f9fa; padding: 15px; border-radius: 8px; border-left: 4px solid #4CAF50; font-family: 'Courier New', monospace; font-size: 1.1em; margin-bottom: 10px; overflow-x: auto;}
+    .math-block { background-color: #f8f9fa; padding: 15px; border-radius: 8px; border-left: 4px solid #4CAF50; font-family: 'Courier New', monospace; margin-bottom: 10px; overflow-x: auto;}
     .result-block { background-color: #e8f5e9; padding: 15px; border-radius: 8px; border-left: 4px solid #2e7d32; font-weight: bold; margin-bottom: 20px;}
     .error-block { background-color: #ffebee; padding: 15px; border-radius: 8px; border-left: 4px solid #d32f2f; color: #c62828; margin-bottom: 20px;}
     .info-text { font-size: 1.05em; color: #34495E; margin-bottom: 15px; line-height: 1.6; background-color: #e3f2fd; padding: 10px; border-radius: 5px; border-left: 3px solid #1976d2;}
@@ -20,7 +20,7 @@ st.markdown("""
 SORTAMENT = [4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 14.0, 15.7, 16.0, 17.5, 18.7, 19.1, 20.0, 21.0, 22.0, 23.0,
              24.0, 25.0, 26.0, 27.0, 28.0, 30.0, 32.0, 34.0, 36.0]
 
-# Расширенная база данных (Якорные точки для покрытия всей России)
+# Расширенная база данных для покрытия климатических зон по всей России
 CLIMATE_DATA = {
     "г. Губкинский (ЯНАО)": {"t_min": -50.0, "t_max": 30.0, "lat": 64.434, "lon": 76.5026, "snow": 5, "wind": 3},
     "г. Сургут (ХМАО)": {"t_min": -43.0, "t_max": 26.0, "lat": 61.25, "lon": 73.4167, "snow": 4, "wind": 2},
@@ -41,6 +41,7 @@ CLIMATE_DATA = {
     "г. Санкт-Петербург": {"t_min": -26.0, "t_max": 25.0, "lat": 59.9343, "lon": 30.3351, "snow": 3, "wind": 2},
     "г. Чита": {"t_min": -40.0, "t_max": 29.0, "lat": 52.0333, "lon": 113.55, "snow": 1, "wind": 3},
     "г. Магадан": {"t_min": -30.0, "t_max": 18.0, "lat": 59.5667, "lon": 150.8, "snow": 4, "wind": 6},
+    "г. Самара": {"t_min": -30.0, "t_max": 30.0, "lat": 53.2001, "lon": 50.15, "snow": 4, "wind": 3},
     "г. Анадырь": {"t_min": -43.0, "t_max": 20.0, "lat": 64.73, "lon": 177.51, "snow": 5, "wind": 6},
     "г. Южно-Сахалинск": {"t_min": -22.0, "t_max": 24.0, "lat": 46.95, "lon": 142.73, "snow": 5, "wind": 4},
     "с. Хатанга": {"t_min": -48.0, "t_max": 20.0, "lat": 71.98, "lon": 102.50, "snow": 5, "wind": 4},
@@ -55,7 +56,7 @@ def get_next_thickness(calc_thickness, min_thickness=12.0):
     return math.ceil(target)
 
 
-# Инициализация переменных
+# Инициализация переменных сессии
 if 'product_type' not in st.session_state: st.session_state.product_type = "Нефть"
 if 't_product' not in st.session_state: st.session_state.t_product = 5.0
 if 'D_H' not in st.session_state: st.session_state.D_H = 1020.0
@@ -72,7 +73,7 @@ if 'E' not in st.session_state: st.session_state.E = 206000.0
 if 'alpha' not in st.session_state: st.session_state.alpha = 0.000012
 if 'mu' not in st.session_state: st.session_state.mu = 0.3
 
-st.sidebar.title("🛢 Учебный комплекс")
+st.sidebar.title("🛢️ Учебный комплекс")
 st.sidebar.markdown("Навигация по разделам РГР:")
 page = st.sidebar.radio("Выберите этап:", [
     "1. Климатология (Интерактивная зона)",
@@ -112,18 +113,56 @@ def find_image(base_name):
     return None
 
 
-# Цветовые палитры для математического моделирования зон (IDW)
+# ==============================================================================
+# УМНАЯ МАТЕМАТИЧЕСКАЯ ГЕНЕРАЦИЯ КОНТУРОВ РОССИИ (БЕЗ "ПОНЧИКОВ")
+# ==============================================================================
+def is_russia(lat, lon):
+    """Грубая математическая маска контуров России, чтобы отрезать океаны и другие страны."""
+    l = lon if lon > 0 else lon + 360
+    if lat < 41 or lat > 82: return False
+    if l < 19 or l > 192: return False
+
+    # Южная граница (отсекаем Европу, Казахстан, Китай, Монголию)
+    if 19 <= l < 28 and lat < 51.0: return False
+    if 28 <= l < 35 and lat < 47.0: return False
+    if 35 <= l < 40 and lat < 43.5: return False
+    if 40 <= l < 45 and lat < 41.5: return False
+    if 45 <= l < 50 and lat < 41.0: return False
+    if 50 <= l < 55 and lat < 46.0: return False
+    if 55 <= l < 65 and lat < 50.5: return False
+    if 65 <= l < 75 and lat < 53.0: return False
+    if 75 <= l < 85 and lat < 49.0: return False
+    if 85 <= l < 115 and lat < 49.5: return False
+    if 115 <= l < 130 and lat < 42.5: return False
+    if 130 <= l < 145 and lat < 42.5: return False
+    if 145 <= l <= 192 and lat < 43.0: return False
+
+    # Северная граница (отсекаем океан)
+    if 19 <= l < 30 and lat > 70.5: return False
+    if 30 <= l < 42 and lat > 69.5: return False
+    if 42 <= l < 55 and lat > 77.5: return False
+    if 55 <= l < 65 and lat > 71.0: return False
+    if 65 <= l < 75 and lat > 73.5: return False
+    if 75 <= l < 85 and lat > 74.0: return False
+    if 85 <= l < 115 and lat > 78.0: return False
+    if 115 <= l < 130 and lat > 74.5: return False
+    if 130 <= l < 160 and lat > 73.5: return False
+    if 160 <= l <= 192 and lat > 71.5: return False
+
+    return True
+
+
 WINTER_PAL = [[60, 0, 100], [0, 50, 200], [100, 150, 255], [150, 220, 200], [200, 255, 150]]
 SUMMER_PAL = [[200, 255, 150], [255, 255, 150], [255, 180, 50], [255, 50, 50], [180, 0, 0]]
-SNOW_PAL = [[240, 250, 255], [150, 200, 255], [0, 50, 200]]
-WIND_PAL = [[255, 255, 200], [255, 150, 50], [200, 0, 0]]
+SNOW_PAL = [[240, 250, 255], [150, 200, 255], [0, 50, 200], [0, 0, 100]]
+WIND_PAL = [[240, 255, 200], [255, 220, 100], [255, 100, 50], [200, 0, 0]]
 
 
 def get_color(val, palette, min_v, max_v):
     ratio = (val - min_v) / (max_v - min_v) if max_v != min_v else 0.5
     ratio = max(0.0, min(1.0, ratio))
     n_colors = len(palette)
-    if ratio == 1.0: return palette[-1]
+    if ratio == 1.0: return palette[-1] + [160]  # Прозрачность альфа-канала
     scaled_ratio = ratio * (n_colors - 1)
     idx = int(scaled_ratio)
     t = scaled_ratio - idx
@@ -131,11 +170,12 @@ def get_color(val, palette, min_v, max_v):
     r = int(c1[0] + (c2[0] - c1[0]) * t)
     g = int(c1[1] + (c2[1] - c1[1]) * t)
     b = int(c1[2] + (c2[2] - c1[2]) * t)
-    return [r, g, b]
+    return [r, g, b, 160]
 
 
+@st.cache_data
 def generate_zone_grid(df_anchors, mode):
-    """Построение сплошных тепловых полигонов по всей территории"""
+    """Создает сплошной ковер по контурам РФ (интерполяция IDW)"""
     if mode == "Зимние температуры (t_min)":
         col, pal, mn, mx = "t_min", WINTER_PAL, -55.0, -15.0
     elif mode == "Летние температуры (t_max)":
@@ -145,15 +185,20 @@ def generate_zone_grid(df_anchors, mode):
     else:
         col, pal, mn, mx = "wind", WIND_PAL, 1.0, 6.0
 
-    dlat, dlon = 0.5, 1.0
-    lats = np.arange(40, 76, 1.0)
-    lons = np.arange(20, 182, 2.0)
+    step_lat, step_lon = 0.8, 1.6
+    dlat, dlon = step_lat / 2, step_lon / 2
+    lats = np.arange(41, 82, step_lat)
+    lons = np.arange(19, 191, step_lon)
 
     anchor_lats, anchor_lons, anchor_vals = df_anchors['lat'].values, df_anchors['lon'].values, df_anchors[col].values
-
     grid_data = []
+
     for lat in lats:
         for lon in lons:
+            if not is_russia(lat, lon):
+                continue  # Вырезаем по маске России!
+
+            # Расчет температуры для пикселя
             lon_dist = (lon - anchor_lons) * math.cos(math.radians(lat))
             lat_dist = lat - anchor_lats
             dist_sq = lon_dist ** 2 + lat_dist ** 2 + 0.1
@@ -161,10 +206,17 @@ def generate_zone_grid(df_anchors, mode):
             val = np.sum(weights * anchor_vals) / np.sum(weights)
 
             c = get_color(val, pal, mn, mx)
-            # Формируем сплошной пиксель-полигон
-            polygon = [[lon - dlon, lat - dlat], [lon + dlon, lat - dlat], [lon + dlon, lat + dlat],
-                       [lon - dlon, lat + dlat]]
+
+            # Коррекция для Чукотки (переход через 180 меридиан)
+            lon_real = lon if lon <= 180 else lon - 360
+            polygon = [
+                [lon_real - dlon, lat - dlat],
+                [lon_real + dlon, lat - dlat],
+                [lon_real + dlon, lat + dlat],
+                [lon_real - dlon, lat + dlat]
+            ]
             grid_data.append({'polygon': polygon, 'color': c})
+
     return pd.DataFrame(grid_data)
 
 
@@ -174,7 +226,7 @@ def generate_zone_grid(df_anchors, mode):
 if page == "1. Климатология (Интерактивная зона)":
     st.title("1. Определение расчетного температурного перепада (Δt)")
     st.markdown(
-        "<div class='info-text'><b>Учебная справка:</b> Температурный перепад Δt — это разница между температурой продукта внутри трубы и температурой замыкания (сварки). Выберите город из базы или создайте свою точку. Интерактивная карта сама смоделирует сплошную климатическую зону для всего материка.</div>",
+        "<div class='info-text'><b>Учебная справка:</b> Температурный перепад Δt — это разница между температурой продукта внутри трубы и температурой замыкания (когда трубу сварили в траншее). Труба стремится расшириться от тепла или сжаться от холода, но грунт ей мешает. Из-за этого возникают колоссальные продольные напряжения, которые могут разорвать или выпучить трубу.</div>",
         unsafe_allow_html=True)
 
     col_map1, col_map2 = st.columns([1, 1])
@@ -208,7 +260,7 @@ if page == "1. Климатология (Интерактивная зона)":
                              "Ветровые районы"],
                             horizontal=True)
 
-    # ------------------ РЕНДЕР СПЛОШНОЙ КАРТЫ PYDECK ------------------
+    # ------------------ РЕНДЕР КАРТЫ С КОНТУРОМ РОССИИ ------------------
     df_anchors = pd.DataFrame.from_dict(CLIMATE_DATA, orient='index').reset_index()
     df_anchors.rename(columns={'index': 'Город'}, inplace=True)
 
@@ -218,20 +270,19 @@ if page == "1. Климатология (Интерактивная зона)":
               "snow": custom_snow, "wind": custom_wind}])
         df_anchors = pd.concat([df_anchors, custom_data], ignore_index=True)
 
+    # Генерация сплошного контура!
     df_grid = generate_zone_grid(df_anchors, map_mode)
 
-    # Слой сплошных полигонов (Без пончиков!)
     layer_zones = pdk.Layer(
         "PolygonLayer",
         df_grid,
         get_polygon="polygon",
         get_fill_color="color",
-        opacity=0.45,  # Общая прозрачность для всего ковра, нет темных пересечений
+        opacity=0.6,
         stroked=False,
         pickable=False,
     )
 
-    # Слой городов (маленькие серые точки для ориентира)
     layer_cities = pdk.Layer(
         "ScatterplotLayer",
         df_anchors,
@@ -241,17 +292,16 @@ if page == "1. Климатология (Интерактивная зона)":
         pickable=False,
     )
 
-    # Слой ВЫБРАННОГО города (Большой красный маркер)
     layer_selected = pdk.Layer(
         "ScatterplotLayer",
         pd.DataFrame([{"lat": city_lat, "lon": city_lon}]),
         get_position=["lon", "lat"],
-        get_radius=50000,
+        get_radius=60000,
         get_fill_color=[255, 50, 50, 255],
         pickable=False,
     )
 
-    view_state = pdk.ViewState(latitude=61.0, longitude=90.0, zoom=2.1, pitch=0)
+    view_state = pdk.ViewState(latitude=64.0, longitude=95.0, zoom=2.0, pitch=0)
 
     st.pydeck_chart(pdk.Deck(
         map_provider="carto",
@@ -280,7 +330,7 @@ if page == "1. Климатология (Интерактивная зона)":
 
     with col4:
         st.markdown(
-            "<div class='info-text'><b>Логика:</b> Летом труба нагревается на солнце (+3°C к воздуху). Зимой металл охлаждается (-6°C).</div>",
+            "<div class='info-text'><b>Логика:</b> При отсутствии точных данных о дате сварки стыков, берем наихудший сценарий. Летом: температура воздуха + 3°C (нагрев трубы солнцем). Зимой: температура воздуха - 6°C.</div>",
             unsafe_allow_html=True)
         t_x = t_min_val - 6.0
         t_m = t_max_val + 3.0
@@ -288,13 +338,13 @@ if page == "1. Климатология (Интерактивная зона)":
         dt_m = st.session_state.t_product - t_m
         calc_dt = max(abs(dt_x), abs(dt_m))
 
-        st.latex(rf"t_x = {t_min_val} - 6 = {t_x}^\circ C \text{{ (Замыкание зимой)}}")
-        st.latex(rf"t_m = {t_max_val} + 3 = {t_m}^\circ C \text{{ (Замыкание летом)}}")
-        st.latex(rf"\Delta t_x = {st.session_state.t_product} - ({t_x}) = {dt_x}^\circ C")
-        st.latex(rf"\Delta t_m = {st.session_state.t_product} - ({t_m}) = {dt_m}^\circ C")
+        st.latex(rf"t_x = {t_min_val} - 6 = {t_x}^\circ \text{{C (Замыкание зимой)}}")
+        st.latex(rf"t_m = {t_max_val} + 3 = {t_m}^\circ \text{{C (Замыкание летом)}}")
+        st.latex(rf"\Delta t_x = {st.session_state.t_product} - ({t_x}) = {dt_x}^\circ \text{{C}}")
+        st.latex(rf"\Delta t_m = {st.session_state.t_product} - ({t_m}) = {dt_m}^\circ \text{{C}}")
 
         st.success(f"**Расчетный (наихудший) температурный перепад:** Δt = **{calc_dt} °C**")
-        if st.button("Сохранить Δt"):
+        if st.button("Сохранить перепад Δt в память"):
             st.session_state.delta_t = calc_dt
             st.success("Перепад сохранен! Переходите к Этапу 2.")
 
@@ -322,22 +372,22 @@ if page == "1. Климатология (Интерактивная зона)":
 elif page == "2. Пример 8.1: Толщина стенки":
     st.title("2. Пример 8.1. Определение расчетной толщины стенки")
     st.markdown(
-        "<div class='info-text'><b>Учебная справка:</b> Здесь определяется минимально необходимая толщина стенки трубы по безмоментной теории оболочек (только на <b>внутреннее давление продукта</b>). Затем берем ближайшую стандартную толщину по ГОСТ.</div>",
+        "<div class='info-text'><b>Учебная справка:</b> Здесь определяется минимально необходимая толщина стенки трубы по безмоментной теории оболочек. Она рассчитывается только на <b>внутреннее давление продукта</b> (распирание). Затем мы берем ближайшую стандартную толщину по ГОСТ. Эта базовая толщина позже будет проверяться на температурные перепады.</div>",
         unsafe_allow_html=True)
 
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.session_state.D_H = st.number_input("Наружный диаметр D_н, мм", value=st.session_state.D_H)
-        st.session_state.P = st.number_input("Рабочее давление p, МПа", value=st.session_state.P)
-        n_p = st.number_input("Коэфф. надежности нагрузки n_p", value=1.1)
+        st.session_state.D_H = st.number_input("Наружный диаметр трубы (D_н), мм", value=st.session_state.D_H)
+        st.session_state.P = st.number_input("Рабочее давление (p), МПа", value=st.session_state.P)
+        n_p = st.number_input("Коэфф. надежности нагрузки (n_p)", value=1.1)
     with col2:
-        st.session_state.R1_n = st.number_input("Врем. сопротивление R1_н, МПа", value=st.session_state.R1_n)
-        st.session_state.R2_n = st.number_input("Предел текучести R2_н, МПа", value=st.session_state.R2_n)
-        st.session_state.m = st.number_input("Коэфф. условий работы m", value=st.session_state.m)
+        st.session_state.R1_n = st.number_input("Врем. сопротивление (R1_н), МПа", value=st.session_state.R1_n)
+        st.session_state.R2_n = st.number_input("Предел текучести (R2_н), МПа", value=st.session_state.R2_n)
+        st.session_state.m = st.number_input("Коэфф. условий работы (m)", value=st.session_state.m)
     with col3:
-        st.session_state.k1 = st.number_input("Коэфф. по материалу k1", value=st.session_state.k1)
-        st.session_state.k2 = st.number_input("Коэфф. по материалу k2", value=st.session_state.k2)
-        st.session_state.k_H = st.number_input("Коэфф. по ответственности k_н", value=st.session_state.k_H)
+        st.session_state.k1 = st.number_input("Коэфф. по материалу (k_1)", value=st.session_state.k1)
+        st.session_state.k2 = st.number_input("Коэфф. по материалу (k_2)", value=st.session_state.k2)
+        st.session_state.k_H = st.number_input("Коэфф. по ответственности (k_н)", value=st.session_state.k_H)
 
     R1 = (st.session_state.R1_n * st.session_state.m) / (st.session_state.k1 * st.session_state.k_H)
     R2 = (st.session_state.R2_n * st.session_state.m) / (st.session_state.k2 * st.session_state.k_H)
@@ -347,7 +397,7 @@ elif page == "2. Пример 8.1: Толщина стенки":
     delta_nom = get_next_thickness(delta_calc, min_thickness=min_req_thickness)
 
     st.markdown("### Пошаговый расчет с пояснениями")
-    st.write("1. Находим расчетные сопротивления материала труб R₁ и R₂:")
+    st.write("1. Находим расчетные сопротивления материала труб R₁ (по пределу прочности) и R₂ (по пределу текучести):")
     st.latex(
         rf"R_1 = \frac{{R_1^н \cdot m}}{{k_1 \cdot k_н}} = \frac{{{st.session_state.R1_n} \cdot {st.session_state.m}}}{{{st.session_state.k1} \cdot {st.session_state.k_H}}} = {R1:.2f} \text{{ МПа}}")
     st.latex(
@@ -358,7 +408,7 @@ elif page == "2. Пример 8.1: Толщина стенки":
         rf"\delta = \frac{{n_p \cdot p \cdot D_н}}{{2(R_1 + n_p \cdot p)}} = \frac{{{n_p} \cdot {st.session_state.P} \cdot {st.session_state.D_H}}}{{2({R1:.2f} + {n_p} \cdot {st.session_state.P})}} = {delta_calc:.2f} \text{{ мм}}")
 
     st.markdown(
-        f"<div class='result-block'>3. Округляем в большую сторону до стандартного значения по ГОСТ. Для труб D_N ≥ 1000 мм толщина не может быть меньше 12 мм.<br><br><b>Принятая предварительная толщина стенки: δ_н = {delta_nom:.1f} мм</b></div>",
+        f"<div class='result-block'>3. Округляем в большую сторону до стандартного значения по ГОСТ. (Для труб D<sub>N</sub> ≥ 1000 мм толщина не может быть меньше 12 мм).<br><br><b>Принятая предварительная толщина стенки: δ_н = {delta_nom:.1f} мм</b></div>",
         unsafe_allow_html=True)
 
     if st.button("Сохранить и перейти к проверке прочности"):
@@ -371,11 +421,13 @@ elif page == "2. Пример 8.1: Толщина стенки":
 elif page == "3. Пример 8.2: Проверка прочности":
     st.title("3. Пример 8.2. Проверка прочности трубопровода")
     st.markdown(
-        "<div class='info-text'><b>Учебная справка:</b> Трубопровод защемлен грунтом. При охлаждении он хочет сжаться, но грунт держит его, вызывая <b>продольные растягивающие напряжения</b>. При нагреве он расширяется, вызывая <b>сжимающие напряжения</b>. Здесь мы проверяем, выдержит ли металл совместное действие кольцевых и продольных напряжений.</div>",
+        "<div class='info-text'><b>Учебная справка:</b> Трубопровод защемлен грунтом. При охлаждении он хочет сжаться, но грунт держит его, вызывая <b>продольные растягивающие напряжения</b>. При нагреве он расширяется, вызывая <b>сжимающие напряжения</b>. Сжатие наиболее опасно, так как может привести к местной потере устойчивости (гофрам). Здесь мы проверяем, выдержит ли металл совместное действие кольцевых и продольных напряжений.</div>",
         unsafe_allow_html=True)
 
-    tab_manual, tab_auto = st.tabs(["🖐️ Ручная проверка (для текущей толщины)", "🚀 Итерационный Автоподбор"])
+    tab_manual, tab_auto = st.tabs(
+        ["🖐️ Ручная проверка (для текущей толщины)", "🚀 Итерационный Автоподбор (Умный алгоритм)"])
 
+    # --- РУЧНАЯ ПРОВЕРКА ---
     with tab_manual:
         st.subheader("Детальный расчет для заданного сечения")
         col1, col2 = st.columns(2)
@@ -469,7 +521,7 @@ elif page == "3. Пример 8.2: Проверка прочности":
                     break
                 else:
                     st.warning(
-                        f"Условие не выполнилось для {current_delta} мм. Берем следующую толщину по сортаменту...")
+                        f"Условие не выполнилось для {current_delta} мм. Проверяем следующую толщину по сортаменту...")
                     current_delta = get_next_thickness(current_delta + 0.1)
                     iteration += 1
 
@@ -530,7 +582,7 @@ elif page == "4. Пример 8.3: Продольная устойчивость
     st.latex(
         rf"q_{{тр}} = q_{{мет}} + q_{{прод}} + q_{{из}} = {q_met:.0f} + {q_prod:.0f} + {q_ins:.0f} = {q_tr:.0f} \text{{ Н/м}}")
 
-    st.write("3. Определение эквивалентного продольного сжимающего усилия S:")
+    st.write("3. Определение эквивалентного продольного сжимающего усилия S (вызывает продольный изгиб):")
     st.latex(
         rf"S = [(0.5 - \mu)\sigma_{{кц}} + \alpha E \Delta t] \cdot F = [(0.5 - 0.3) \cdot {sigma_kc:.2f} + {st.session_state.alpha} \cdot {st.session_state.E} \cdot {st.session_state.delta_t}] \cdot {F:.4f} = {S:.2f} \text{{ МН}}")
 

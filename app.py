@@ -131,10 +131,22 @@ def get_next_thickness(calc_thickness, min_thickness=12.0):
 
 
 def fmt(val):
-    """Обрезает пустые нули после запятой, оставляя только значащие цифры (до 4-х знаков)"""
+    """Интеллектуальное округление до значащих цифр"""
     try:
+        val = float(val)
         if val == 0: return "0"
-        res = f"{float(val):.4f}".rstrip('0').rstrip('.')
+        abs_val = abs(val)
+        if abs_val < 0.0001:
+            res = f"{val:.8f}"
+        elif abs_val < 0.01:
+            res = f"{val:.6f}"
+        elif abs_val < 1:
+            res = f"{val:.4f}"
+        elif abs_val < 10:
+            res = f"{val:.3f}"
+        else:
+            res = f"{val:.2f}"
+        res = res.rstrip('0').rstrip('.')
         return res.replace('.', ',')
     except:
         return str(val)
@@ -142,7 +154,7 @@ def fmt(val):
 
 # --- ИНИЦИАЛИЗАЦИЯ И ЖЕСТКОЕ СОХРАНЕНИЕ ВСЕХ ПЕРЕМЕННЫХ В ПАМЯТЬ ---
 state_defaults = {
-    'product_type': "Нефть", 't_product': 20.0,
+    'product_type': "Нефть", 't_product': 5.0,
     'D_H': 1020.0, 'P': 6.0, 'n_p': 1.1,
     'R1_n': 490.0, 'R2_n': 345.0,
     'm': 0.990, 'k1': 1.34, 'k2': 1.15, 'k_H': 1.100,
@@ -156,6 +168,8 @@ state_defaults = {
 for k, v in state_defaults.items():
     if k not in st.session_state:
         st.session_state[k] = v
+    if f"temp_{k}" not in st.session_state:
+        st.session_state[f"temp_{k}"] = v
 
 
 def update_val(key):
@@ -165,6 +179,7 @@ def update_val(key):
 def update_t_product():
     st.session_state.product_type = st.session_state.temp_product_type
     st.session_state.t_product = 5.0 if st.session_state.product_type == "Нефть" else 6.0
+    st.session_state.temp_t_product = st.session_state.t_product
 
 
 st.sidebar.title("🛢️ Навигация РГР")
@@ -282,7 +297,10 @@ if page == "1. Климатология":
         st.latex(rf"\Delta t_x = {fmt(st.session_state.t_product)} - ({fmt(t_min_val)}) = {fmt(dt_x)}^\circ \text{{C}}")
         st.latex(rf"\Delta t_m = {fmt(st.session_state.t_product)} - ({fmt(t_max_val)}) = {fmt(dt_m)}^\circ \text{{C}}")
         st.success(f"**Принятый перепад:** Δt = **{fmt(calc_dt)} °C**")
-        if st.button("Сохранить Δt"): st.session_state.delta_t = calc_dt
+        if st.button("Сохранить Δt"):
+            st.session_state.delta_t = calc_dt
+            st.session_state.temp_delta_t = calc_dt
+            st.rerun()
 
     with st.expander("Посмотреть оригинальные карты из СНиП"):
         tab_img1, tab_img2, tab_img3, tab_img4, tab_img5 = st.tabs(["t_max", "t_min", "Снег", "Ветер", "Гололед"])
@@ -308,7 +326,7 @@ if page == "1. Климатология":
 elif page == "2. 8.1: Толщина стенки":
     st.title("2. Пример 8.1. Расчет толщины стенки")
     st.markdown(
-        "<div class='info-text'>Минимально необходимая толщина стенки трубы вычисляется по безмоментной теории оболочек (формула котла) от воздействия внутреннего давления. Полученное значение округляется до ближайшего большего из ГОСТ.</div>",
+        "<div class='info-text'>Минимально необходимая толщина стенки трубы вычисляется по безмоментной теории оболочек от воздействия внутреннего давления.</div>",
         unsafe_allow_html=True)
 
     col1, col2, col3 = st.columns(3)
@@ -351,7 +369,10 @@ elif page == "2. 8.1: Толщина стенки":
     st.markdown(
         f"<div class='result-block'>Округление по ГОСТ. Принятая толщина стенки: δ_н = {fmt(delta_nom)} мм</div>",
         unsafe_allow_html=True)
-    if st.button("Сохранить толщину"): st.session_state.delta_n = delta_nom
+    if st.button("Сохранить толщину"):
+        st.session_state.delta_n = delta_nom
+        st.session_state.temp_delta_n = delta_nom
+        st.rerun()
 
 # ==============================================================================
 # 3. ПРИМЕР 8.2
@@ -424,6 +445,7 @@ elif page == "3. 8.2: Прочность по деформациям":
                 if is_ok_iter:
                     st.success(f"**Толщина стенки успешно подобрана: {cur_d} мм.**")
                     st.session_state.delta_n = cur_d
+                    st.session_state.temp_delta_n = cur_d
                     break
                 else:
                     cur_d = get_next_thickness(cur_d + 0.1)
@@ -512,7 +534,7 @@ elif page == "4. 8.3: Продольная устойчивость":
         st.markdown(f"<div class='result-block'>Общая продольная устойчивость прямого участка ОБЕСПЕЧЕНА.</div>",
                     unsafe_allow_html=True)
     else:
-        st.markdown(f"<div class='error-block'>Устойчивость НЕ обеспечена. Требуется балластировка.</div>",
+        st.markdown(f"<div class='error-block'>Устойчивость НЕ обеспечена. Требуется балластировка (пригрузы).</div>",
                     unsafe_allow_html=True)
 
 # ==============================================================================
@@ -521,7 +543,7 @@ elif page == "4. 8.3: Продольная устойчивость":
 elif page == "5. 8.4: Устойчивость в насыпи (Прямой)":
     st.title("5. Пример 8.4. Устойчивость в грунтовой насыпи")
     st.markdown(
-        "<div class='info-text'>Расчет устойчивости трубопровода, уложенного в наземную насыпь (часто на болотах). Оценивается пассивный отпор берм насыпи, который предотвращает боковой выброс трубы.</div>",
+        "<div class='info-text'>Расчет устойчивости трубопровода, уложенного в наземную насыпь. Оценивается пассивный отпор берм насыпи, который предотвращает боковой выброс трубы.</div>",
         unsafe_allow_html=True)
 
     col1, col2 = st.columns(2)
@@ -578,7 +600,7 @@ elif page == "5. 8.4: Устойчивость в насыпи (Прямой)":
     st.latex(
         rf"E_1 = n_{{гр}}\gamma_{{гр}}(h_1^2 - h_2^2)\frac{{K_п}}{{2}} + p_{{гр}}h_1K_п + 2n_{{гр}}c_{{гр}}(h_1-h_2)\sqrt{{K_п}} = {fmt(E1)} \text{{ Н/м}}")
     st.latex(rf"E_{{акт}} = n_{{гр}}\gamma_{{гр}}h_1^2\frac{{K_а}}{{2}} + p_{{гр}}h_1K_а = {fmt(E_act)} \text{{ Н/м}}")
-    st.latex(rf"E_2 = q_{{тр}} \tan \varphi = {fmt(E2)} \text{{ Н/м}}")
+    st.latex(rf"E_2 = q_{{тр}} \tan \varphi = {fmt(E2)} \text{{ Н/м}} \quad (\text{{поперечное трение}})")
     st.latex(rf"q_{{гор}} = E_1 - E_{{акт}} + E_2 = {fmt(q_gor)} \text{{ Н/м}}")
 
     st.markdown("<div class='step-header'>3. Критическое усилие и проверка</div>", unsafe_allow_html=True)
@@ -595,7 +617,7 @@ elif page == "5. 8.4: Устойчивость в насыпи (Прямой)":
                     unsafe_allow_html=True)
     else:
         st.markdown(
-            f"<div class='error-block'>Устойчивость прямого участка в насыпи НЕ обеспечена. Увеличьте ширину бермы.</div>",
+            f"<div class='error-block'>Устойчивость прямого участка в насыпи НЕ обеспечена. Увеличьте ширину бермы $b$.</div>",
             unsafe_allow_html=True)
 
 # ==============================================================================
@@ -632,6 +654,7 @@ elif page == "6. 8.5: Горизонтальный поворот":
     st.markdown("<div class='step-header'>1. Геометрия насыпи и сдвигающее усилие</div>", unsafe_allow_html=True)
     cot_aH = 1.0 / math.tan(math.radians(st.session_state.alpha_H))
     a_low = st.session_state.b + st.session_state.H * cot_aH
+
     req_q_horiz = st.session_state.k_sdv * S * 1e6 / st.session_state.rho_gor
 
     st.latex(
@@ -658,7 +681,7 @@ elif page == "6. 8.5: Горизонтальный поворот":
             unsafe_allow_html=True)
     else:
         st.markdown(
-            f"<div class='error-block'>Устойчивость НЕ обеспечена. Сдвиг {fmt(q_sdv)} < {fmt(req_q_horiz)}.</div>",
+            f"<div class='error-block'>Устойчивость НЕ обеспечена. Грунт не удержит трубу (Сдвиг {fmt(q_sdv)} < {fmt(req_q_horiz)}). Требуется увеличить радиус кривизны.</div>",
             unsafe_allow_html=True)
 
 # ==============================================================================
@@ -989,6 +1012,8 @@ elif page == "9. Итоговый отчет":
         u_end = (tau_pr_87 / (st.session_state.k_i * 1e6)) + (((S * 1e6) ** 2 - (P_pr_87 * 1e6) ** 2) / (
                     2 * math.pi * D_H_m * tau_pr_87 * (st.session_state.E * 1e6) * F))
         st.markdown("3. Длина зон деформации и перемещение конца (зона скольжения):")
+        st.latex(
+            rf"l_1 = \frac{{3.5}}{{\beta}} = {fmt(3.5 / beta_87)} \text{{ м}}, \quad l_2 = \frac{{S - P_{{пр}}}}{{p_0}} = {fmt((S * 1e6 - P_pr_87 * 1e6) / (math.pi * D_H_m * tau_pr_87))} \text{{ м}}")
         st.latex(rf"u = {fmt(u_end * 1000)} \text{{ мм}}")
         st.markdown(
             f"**Итог:** Усилие S больше предельного P_пр (**{fmt(S)} > {fmt(P_pr_87)} МН**). Формируется зона проскальзывания.")

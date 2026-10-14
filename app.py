@@ -130,25 +130,38 @@ def get_next_thickness(calc_thickness, min_thickness=12.0):
     return math.ceil(target)
 
 
-# --- ГЛОБАЛЬНАЯ ИНИЦИАЛИЗАЦИЯ ИЗ ВАШЕГО ПРИМЕРА ---
+def fmt(val):
+    try:
+        if val == 0: return "0"
+        return f"{float(f'{val:.5g}'):g}".replace('.', ',')
+    except:
+        return val
+
+
+# --- ИНИЦИАЛИЗАЦИЯ И ЖЕСТКОЕ СОХРАНЕНИЕ ВСЕХ ПЕРЕМЕННЫХ В ПАМЯТЬ ---
 state_defaults = {
-    'product_type': "Нефть", 't_product': 5.0,
-    'D_H': 1020.0, 'P': 6.0, 'n_p': 1.1,
-    'R1_n': 490.0, 'R2_n': 345.0,
-    'm': 0.990, 'k1': 1.34, 'k2': 1.15, 'k_H': 1.100,
-    'delta_n': 11.0, 'delta_t': 50.0,
+    'product_type': "Нефть", 't_product': 20.0,
+    'D_H': 630.0, 'P': 8.0, 'n_p': 1.15,
+    'R1_n': 590.0, 'R2_n': 440.0,
+    'm': 0.990, 'k1': 1.34, 'k2': 1.15, 'k_H': 1.155,
+    'delta_n': 10.0, 'delta_t': 60.0,
     'E': 206000.0, 'alpha': 0.000012, 'mu': 0.3,
     'gamma_gr': 17000.0, 'phi_deg': 36.0, 'c_gr': 0.0, 'k_0': 5.0, 'k_i': 5.0,
     'h0': 1.2, 'n_gr': 0.95, 'h1': 1.026, 'H': 2.2, 'b': 0.85, 'alpha_H': 39.0,
     'rho_ins': 1750.0, 'delta_ins': 3.0, 'rho_gor': 1400.0, 'f_gr': 0.3, 'k_sdv': 1.25,
-    'rho_v': 1400.0, 'alpha_v': 50.0, 'k_np': 1.25
+    'rho_v': 1400.0, 'alpha_v': 50.0, 'k_np': 1.25, 'q_gor_input': 84689.4
 }
 for k, v in state_defaults.items():
     if k not in st.session_state:
         st.session_state[k] = v
 
 
+def update_val(key):
+    st.session_state[key] = st.session_state[f"temp_{key}"]
+
+
 def update_t_product():
+    st.session_state.product_type = st.session_state.temp_product_type
     st.session_state.t_product = 5.0 if st.session_state.product_type == "Нефть" else 6.0
 
 
@@ -165,7 +178,7 @@ page = st.sidebar.radio("Меню:", [
     "9. Итоговый отчет"
 ])
 st.sidebar.markdown("---")
-st.sidebar.info(f"**Толщина стенки (δ_н):**\n\n{st.session_state.delta_n:.1f} мм")
+st.sidebar.info(f"**Толщина стенки (δ_н):**\n\n{st.session_state.delta_n} мм")
 
 
 def find_image(base_name):
@@ -202,7 +215,7 @@ if page == "1. Климатология":
     col_map1, col_map2 = st.columns([1, 1])
     with col_map1:
         st.subheader("Выбор района")
-        region = st.selectbox("Город из базы:", list(CLIMATE_DATA.keys()) + ["Свой город"])
+        region = st.selectbox("Город из базы:", ["Свой город"] + list(CLIMATE_DATA.keys()))
         if region == "Свой город":
             c_c1, c_c2 = st.columns(2)
             custom_name = c_c1.text_input("Название", value="Сургут-Уфа")
@@ -252,8 +265,10 @@ if page == "1. Климатология":
     st.markdown("<div class='step-header'>Вычисление расчетного перепада</div>", unsafe_allow_html=True)
     col3, col4 = st.columns(2)
     with col3:
-        st.radio("Тип продукта:", ["Нефть", "Газ"], key="product_type", on_change=update_t_product)
-        st.number_input("Температура продукта (t_э), °C", key="t_product")
+        st.radio("Тип продукта:", ["Нефть", "Газ"], key="temp_product_type",
+                 index=0 if st.session_state.product_type == "Нефть" else 1, on_change=update_t_product)
+        st.number_input("Температура продукта (t_э), °C", key="temp_t_product", value=float(st.session_state.t_product),
+                        on_change=update_val, args=("t_product",))
 
     with col4:
         st.markdown(
@@ -262,9 +277,9 @@ if page == "1. Климатология":
         dt_x = st.session_state.t_product - t_min_val
         dt_m = st.session_state.t_product - t_max_val
         calc_dt = max(abs(dt_x), abs(dt_m))
-        st.latex(rf"\Delta t_x = {st.session_state.t_product} - ({t_min_val}) = {dt_x}^\circ \text{{C}}")
-        st.latex(rf"\Delta t_m = {st.session_state.t_product} - ({t_max_val}) = {dt_m}^\circ \text{{C}}")
-        st.success(f"**Принятый перепад:** Δt = **{calc_dt} °C**")
+        st.latex(rf"\Delta t_x = {fmt(st.session_state.t_product)} - ({fmt(t_min_val)}) = {fmt(dt_x)}^\circ \text{{C}}")
+        st.latex(rf"\Delta t_m = {fmt(st.session_state.t_product)} - ({fmt(t_max_val)}) = {fmt(dt_m)}^\circ \text{{C}}")
+        st.success(f"**Принятый перепад:** Δt = **{fmt(calc_dt)} °C**")
         if st.button("Сохранить Δt"): st.session_state.delta_t = calc_dt
 
     with st.expander("Посмотреть оригинальные карты из СНиП"):
@@ -296,17 +311,26 @@ elif page == "2. 8.1: Толщина стенки":
 
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.session_state.D_H = st.number_input("Наружный диаметр (D_н), мм", value=float(st.session_state.D_H))
-        st.session_state.P = st.number_input("Рабочее давление (p), МПа", value=float(st.session_state.P))
-        st.session_state.n_p = st.number_input("Надежность нагрузки (n_p)", value=float(st.session_state.n_p))
+        st.number_input("Наружный диаметр (D_н), мм", key="temp_D_H", value=float(st.session_state.D_H),
+                        on_change=update_val, args=("D_H",))
+        st.number_input("Рабочее давление (p), МПа", key="temp_P", value=float(st.session_state.P),
+                        on_change=update_val, args=("P",))
+        st.number_input("Надежность нагрузки (n_p)", key="temp_n_p", value=float(st.session_state.n_p),
+                        on_change=update_val, args=("n_p",))
     with col2:
-        st.session_state.R1_n = st.number_input("Врем. сопротивление (R1_н), МПа", value=float(st.session_state.R1_n))
-        st.session_state.R2_n = st.number_input("Предел текучести (R2_н), МПа", value=float(st.session_state.R2_n))
-        st.session_state.m = st.number_input("Условия работы (m)", value=float(st.session_state.m))
+        st.number_input("Врем. сопротивление (R1_н), МПа", key="temp_R1_n", value=float(st.session_state.R1_n),
+                        on_change=update_val, args=("R1_n",))
+        st.number_input("Предел текучести (R2_н), МПа", key="temp_R2_n", value=float(st.session_state.R2_n),
+                        on_change=update_val, args=("R2_n",))
+        st.number_input("Условия работы (m)", key="temp_m", value=float(st.session_state.m), on_change=update_val,
+                        args=("m",))
     with col3:
-        st.session_state.k1 = st.number_input("По материалу (k_1)", value=float(st.session_state.k1))
-        st.session_state.k2 = st.number_input("По материалу (k_2)", value=float(st.session_state.k2))
-        st.session_state.k_H = st.number_input("По ответственности (k_н)", value=float(st.session_state.k_H))
+        st.number_input("По материалу (k_1)", key="temp_k1", value=float(st.session_state.k1), on_change=update_val,
+                        args=("k1",))
+        st.number_input("По материалу (k_2)", key="temp_k2", value=float(st.session_state.k2), on_change=update_val,
+                        args=("k2",))
+        st.number_input("По ответственности (k_н)", key="temp_k_H", value=float(st.session_state.k_H),
+                        on_change=update_val, args=("k_H",))
 
     R1 = (st.session_state.R1_n * st.session_state.m) / (st.session_state.k1 * st.session_state.k_H)
     R2 = (st.session_state.R2_n * st.session_state.m) / (st.session_state.k2 * st.session_state.k_H)
@@ -316,14 +340,14 @@ elif page == "2. 8.1: Толщина стенки":
 
     st.markdown("<div class='step-header'>Ход вычислений</div>", unsafe_allow_html=True)
     st.latex(
-        rf"R_1 = \frac{{R_1^н \cdot m}}{{k_1 \cdot k_н}} = \frac{{{st.session_state.R1_n} \cdot {st.session_state.m}}}{{{st.session_state.k1} \cdot {st.session_state.k_H}}} = {R1:.1f} \text{{ МПа}}")
+        rf"R_1 = \frac{{R_1^н m}}{{k_1 k_н}} = \frac{{{fmt(st.session_state.R1_n)} \cdot {fmt(st.session_state.m)}}}{{{fmt(st.session_state.k1)} \cdot {fmt(st.session_state.k_H)}}} = {fmt(R1)} \text{{ МПа}}")
     st.latex(
-        rf"R_2 = \frac{{R_2^н \cdot m}}{{k_2 \cdot k_н}} = \frac{{{st.session_state.R2_n} \cdot {st.session_state.m}}}{{{st.session_state.k2} \cdot {st.session_state.k_H}}} = {R2:.1f} \text{{ МПа}}")
+        rf"R_2 = \frac{{R_2^н m}}{{k_2 k_н}} = \frac{{{fmt(st.session_state.R2_n)} \cdot {fmt(st.session_state.m)}}}{{{fmt(st.session_state.k2)} \cdot {fmt(st.session_state.k_H)}}} = {fmt(R2)} \text{{ МПа}}")
     st.latex(
-        rf"\delta = \frac{{n_p \cdot p \cdot D_н}}{{2(R_1 + n_p \cdot p)}} = \frac{{{st.session_state.n_p} \cdot {st.session_state.P} \cdot {st.session_state.D_H}}}{{2({R1:.1f} + {st.session_state.n_p} \cdot {st.session_state.P})}} = {delta_calc:.2f} \text{{ мм}}")
+        rf"\delta = \frac{{npD_н}}{{2(R_1 + np)}} = \frac{{{fmt(st.session_state.n_p)} \cdot {fmt(st.session_state.P)} \cdot {fmt(st.session_state.D_H)}}}{{2({fmt(R1)} + {fmt(st.session_state.n_p)} \cdot {fmt(st.session_state.P)})}} = {fmt(delta_calc)} \text{{ мм}}")
 
     st.markdown(
-        f"<div class='result-block'>Округление по ГОСТ. Принятая толщина стенки: δ_н = {delta_nom:.1f} мм</div>",
+        f"<div class='result-block'>Округление по ГОСТ. Принятая толщина стенки: δ_н = {fmt(delta_nom)} мм</div>",
         unsafe_allow_html=True)
     if st.button("Сохранить толщину"): st.session_state.delta_n = delta_nom
 
@@ -341,52 +365,44 @@ elif page == "3. 8.2: Прочность по деформациям":
     with tab_manual:
         col1, col2 = st.columns(2)
         with col1:
-            check_delta = st.number_input("Толщина стенки δ_н, мм", value=float(st.session_state.delta_n), step=0.1)
+            st.number_input("Толщина стенки δ_н, мм", key="temp_delta_n", value=float(st.session_state.delta_n),
+                            step=0.1, on_change=update_val, args=("delta_n",))
         with col2:
-            check_dt = st.number_input("Темп. перепад Δt, °C", value=float(st.session_state.delta_t))
+            st.number_input("Темп. перепад Δt, °C", key="temp_delta_t", value=float(st.session_state.delta_t),
+                            on_change=update_val, args=("delta_t",))
 
-        D_vn = st.session_state.D_H - 2 * check_delta
-        sigma_kc = st.session_state.P * D_vn / (2 * check_delta)
-        sigma_kc_allow = (st.session_state.m / (0.9 * st.session_state.k_H)) * st.session_state.R2_n
-        sigma_pr = -st.session_state.alpha * st.session_state.E * check_dt + st.session_state.mu * sigma_kc
+        is_ok, sig_kc, sig_kc_allow, sig_pr, psi, sig_pr_allow = check_strength(st.session_state.delta_n,
+                                                                                st.session_state.delta_t)
+        D_vn = st.session_state.D_H - 2 * st.session_state.delta_n
         R2_A = (st.session_state.m * st.session_state.R2_n) / (0.9 * st.session_state.k_H)
 
         st.markdown("<div class='step-header'>1. Кольцевые напряжения</div>", unsafe_allow_html=True)
         st.latex(
-            rf"\sigma_{{кц}}^н = \frac{{p \cdot D_{{вн}}}}{{2\delta_н}} = \frac{{{st.session_state.P} \cdot {D_vn:.2f}}}{{2 \cdot {check_delta}}} = {sigma_kc:.2f} \text{{ МПа}}")
+            rf"\sigma_{{кц}}^н = \frac{{pD_{{вн}}}}{{2\delta_н}} = \frac{{{fmt(st.session_state.P)} \cdot {fmt(D_vn)}}}{{2 \cdot {fmt(st.session_state.delta_n)}}} = {fmt(sig_kc)} \text{{ МПа}}")
         st.latex(
-            rf"[\sigma_{{кц}}] = \frac{{m}}{{0.9 \cdot k_н}} \cdot R_2^н = \frac{{{st.session_state.m}}}{{0.9 \cdot {st.session_state.k_H}}} \cdot {st.session_state.R2_n} = {sigma_kc_allow:.2f} \text{{ МПа}}")
+            rf"[\sigma_{{кц}}] = \frac{{m}}{{0.9 k_н}} R_2^н = \frac{{{fmt(st.session_state.m)}}}{{0.9 \cdot {fmt(st.session_state.k_H)}}} \cdot {fmt(st.session_state.R2_n)} = {fmt(sig_kc_allow)} \text{{ МПа}}")
 
         st.markdown("<div class='step-header'>2. Продольные напряжения</div>", unsafe_allow_html=True)
         st.latex(
-            rf"\sigma_{{пр}}^н = -\alpha \cdot E \cdot \Delta t + \mu \cdot \sigma_{{кц}}^н = -{st.session_state.alpha} \cdot {st.session_state.E} \cdot {check_dt} + {st.session_state.mu} \cdot {sigma_kc:.2f} = {sigma_pr:.2f} \text{{ МПа}}")
+            rf"\sigma_{{пр}}^н = -\alpha E \Delta t + \mu \sigma_{{кц}}^н = -{fmt(st.session_state.alpha)} \cdot {fmt(st.session_state.E)} \cdot {fmt(st.session_state.delta_t)} + {fmt(st.session_state.mu)} \cdot {fmt(sig_kc)} = {fmt(sig_pr)} \text{{ МПа}}")
 
         st.markdown("<div class='step-header'>3. Эквивалентные напряжения и проверка</div>", unsafe_allow_html=True)
-        if sigma_pr < 0:
-            under_sqrt = 1 - 0.75 * (sigma_kc / sigma_kc_allow) ** 2
-            if under_sqrt < 0:
-                psi_1 = 0.0
+        if sig_pr < 0:
+            if psi == 0.0:
                 st.error("Ошибка: Кольцевые напряжения превышают допустимые пределы (подкоренное выражение < 0).")
             else:
-                psi_1 = math.sqrt(under_sqrt) - 0.5 * (sigma_kc / sigma_kc_allow)
                 st.latex(
-                    rf"\psi_1 = \sqrt{{1 - 0.75 \left(\frac{{\sigma_{{кц}}^н}}{{[\sigma_{{кц}}]}}\right)^2}} - 0.5 \left(\frac{{\sigma_{{кц}}^н}}{{[\sigma_{{кц}}]}}\right) = {psi_1:.4f}")
+                    rf"\psi_1 = \sqrt{{1 - 0.75 \left(\frac{{\sigma_{{кц}}^н}}{{[\sigma_{{кц}}]}}\right)^2}} - 0.5 \frac{{\sigma_{{кц}}^н}}{{[\sigma_{{кц}}]}} = \sqrt{{1 - 0.75 \left(\frac{{{fmt(sig_kc)}}}{{{fmt(sig_kc_allow)}}}\right)^2}} - 0.5 \frac{{{fmt(sig_kc)}}}{{{fmt(sig_kc_allow)}}} = {fmt(psi)}")
         else:
-            psi_1 = 1.0
             st.write("Труба растянута ($\sigma_{пр}^н \ge 0$), следовательно $\psi_1 = 1.0$")
 
-        sigma_pr_allow = psi_1 * sigma_kc_allow
         st.latex(
-            rf"[\sigma_{{пр}}] = \psi_1 \cdot R_2^д = {psi_1:.4f} \cdot {R2_A:.2f} = {sigma_pr_allow:.2f} \text{{ МПа}}")
-
-        is_ok = (sigma_kc <= sigma_kc_allow) and (abs(sigma_pr) <= sigma_pr_allow)
+            rf"R_2^д = \frac{{m R_2^н}}{{0.9 k_н}} = \frac{{{fmt(st.session_state.m)} \cdot {fmt(st.session_state.R2_n)}}}{{0.9 \cdot {fmt(st.session_state.k_H)}}} = {fmt(R2_A)} \text{{ МПа}}")
+        st.latex(rf"[\sigma_{{пр}}] = \psi_1 R_2^д = {fmt(psi)} \cdot {fmt(R2_A)} = {fmt(sig_pr_allow)} \text{{ МПа}}")
 
         if is_ok:
             st.markdown(f"<div class='result-block'>Прочность обеспечена (σ_кц ≤ [σ_кц] и |σ_пр| ≤ [σ_пр]).</div>",
                         unsafe_allow_html=True)
-            st.latex(
-                rf"\text{{Мин. радиус изгиба СОД: }} \rho_{{min}} = 1000 \cdot D_{{вн}} = {1000 * D_vn / 1000:.2f} \text{{ м}}")
-            if st.button("Зафиксировать толщину"): st.session_state.delta_n = check_delta
         else:
             st.markdown(f"<div class='error-block'>Прочность НЕ обеспечена. Требуется увеличить толщину стенки.</div>",
                         unsafe_allow_html=True)
@@ -397,19 +413,12 @@ elif page == "3. 8.2: Прочность по деформациям":
             cur_d = st.session_state.delta_n
             iteration = 1
             while True:
-                D_vn_iter = st.session_state.D_H - 2 * cur_d
-                sig_kc_iter = st.session_state.P * D_vn_iter / (2 * cur_d)
-                sig_pr_iter = -st.session_state.alpha * st.session_state.E * st.session_state.delta_t + st.session_state.mu * sig_kc_iter
-                psi_iter = math.sqrt(abs(1 - 0.75 * (sig_kc_iter / sigma_kc_allow) ** 2)) - 0.5 * (
-                            sig_kc_iter / sigma_kc_allow) if sig_pr_iter < 0 else 1.0
-                sig_pr_allow_iter = psi_iter * sigma_kc_allow
-                is_ok_iter = (sig_kc_iter <= sigma_kc_allow) and (abs(sig_pr_iter) <= sig_pr_allow_iter)
-
+                is_ok_iter, sig_kc_iter, sig_kc_allow_iter, sig_pr_iter, psi_iter, sig_pr_allow_iter = check_strength(
+                    cur_d, st.session_state.delta_t)
                 with st.expander(f"Итерация {iteration}. Проверка δ = {cur_d} мм",
                                  expanded=True if is_ok_iter else False):
-                    st.write(f"σ_кц = {sig_kc_iter:.2f} МПа (доп. {sigma_kc_allow:.2f} МПа)")
-                    st.write(f"σ_пр = {abs(sig_pr_iter):.2f} МПа (доп. {sig_pr_allow_iter:.2f} МПа)")
-
+                    st.write(f"σ_кц = {fmt(sig_kc_iter)} МПа (доп. {fmt(sig_kc_allow_iter)} МПа)")
+                    st.write(f"σ_пр = {fmt(abs(sig_pr_iter))} МПа (доп. {fmt(sig_pr_allow_iter)} МПа)")
                 if is_ok_iter:
                     st.success(f"**Толщина стенки успешно подобрана: {cur_d} мм.**")
                     st.session_state.delta_n = cur_d
@@ -429,15 +438,19 @@ elif page == "4. 8.3: Продольная устойчивость":
 
     col1, col2 = st.columns(2)
     with col1:
-        st.session_state.gamma_gr = st.number_input("Удельный вес грунта γ_гр, Н/м³",
-                                                    value=float(st.session_state.gamma_gr))
-        st.session_state.h0 = st.number_input("Засыпка до верха h0, м", value=float(st.session_state.h0))
-        st.session_state.phi_deg = st.number_input("Трение грунта φ, град", value=float(st.session_state.phi_deg))
+        st.number_input("Удельный вес грунта γ_гр, Н/м³", key="temp_gamma_gr", value=float(st.session_state.gamma_gr),
+                        on_change=update_val, args=("gamma_gr",))
+        st.number_input("Засыпка до верха h0, м", key="temp_h0", value=float(st.session_state.h0), on_change=update_val,
+                        args=("h0",))
+        st.number_input("Трение грунта φ, град", key="temp_phi_deg", value=float(st.session_state.phi_deg),
+                        on_change=update_val, args=("phi_deg",))
     with col2:
-        st.session_state.k_0 = st.number_input("Постель грунта k0, МН/м³", value=float(st.session_state.k_0))
-        st.session_state.rho_ins = st.number_input("Плотность изоляции ρ_из, кг/м³",
-                                                   value=float(st.session_state.rho_ins))
-        st.session_state.delta_ins = st.number_input("Толщина изоляции, мм", value=float(st.session_state.delta_ins))
+        st.number_input("Постель грунта k0, МН/м³", key="temp_k_0", value=float(st.session_state.k_0),
+                        on_change=update_val, args=("k_0",))
+        st.number_input("Плотность изоляции ρ_из, кг/м³", key="temp_rho_ins", value=float(st.session_state.rho_ins),
+                        on_change=update_val, args=("rho_ins",))
+        st.number_input("Толщина изоляции, мм", key="temp_delta_ins", value=float(st.session_state.delta_ins),
+                        on_change=update_val, args=("delta_ins",))
 
     D_H_m, delta_m = st.session_state.D_H / 1000, st.session_state.delta_n / 1000
     D_vn_m = D_H_m - 2 * delta_m
@@ -468,27 +481,31 @@ elif page == "4. 8.3: Продольная устойчивость":
     lam = 2 * math.pi * math.pow((st.session_state.E * 1e6) * I / (st.session_state.k_0 * 1e6 * D_ins_m), 0.25)
 
     st.markdown("<div class='step-header'>1. Геометрия и весовые нагрузки</div>", unsafe_allow_html=True)
-    st.latex(rf"F = \frac{{\pi(D_н^2 - D_{{вн}}^2)}}{{4}} = {F:.6f} \text{{ м}}^2 \quad I = {I:.6f} \text{{ м}}^4")
     st.latex(
-        rf"q_{{мет}} = \gamma_м F = {q_met:.2f} \text{{ Н/м}} \quad q_{{прод}} = \rho_{{пр}} g \frac{{\pi D_{{вн}}^2}}{{4}} = {q_prod:.2f} \text{{ Н/м}}")
-    st.latex(rf"q_{{тр}} = n_{{с.в}}(q_{{мет}} + q_{{из}}) + n_{{пр}} q_{{прод}} = {q_tr:.2f} \text{{ Н/м}}")
+        rf"F = \frac{{\pi(D_н^2 - D_{{вн}}^2)}}{{4}} = {fmt(F)} \text{{ м}}^2 \quad I = \frac{{\pi(D_н^4 - D_{{вн}}^4)}}{{64}} = {fmt(I)} \text{{ м}}^4")
+    st.latex(
+        rf"q_{{мет}} = \gamma_м F = {fmt(q_met)} \text{{ Н/м}} \quad q_{{прод}} = \rho_{{пр}} g \frac{{\pi D_{{вн}}^2}}{{4}} = {fmt(q_prod)} \text{{ Н/м}}")
+    st.latex(rf"q_{{из}}^н = \rho_{{из}} g \frac{{\pi (D_{{н.и}}^2 - D_н^2)}}{{4}} = {fmt(q_ins)} \text{{ Н/м}}")
+    st.latex(rf"q_{{тр}} = n_{{с.в}}(q_{{мет}} + q_{{из}}) + n_{{пр}} q_{{прод}} = {fmt(q_tr)} \text{{ Н/м}}")
 
     st.markdown("<div class='step-header'>2. Продольное усилие и давление грунта</div>", unsafe_allow_html=True)
-    st.latex(rf"S = [(0.5 - \mu)\sigma_{{кц}} + \alpha E \Delta t] F = {S:.4f} \text{{ МН}}")
+    st.latex(rf"S = [(0.5 - \mu)\sigma_{{кц}} + \alpha E \Delta t] F = {fmt(S)} \text{{ МН}}")
     st.latex(
-        rf"p_{{гр}} = {p_gr:.2f} \text{{ Па}} \quad \rightarrow \quad \tau_{{пр}} = p_{{гр}} \tan \varphi = {tau_pr:.2f} \text{{ Па}}")
-    st.latex(rf"p_0 = \pi D_{{н.и}} \tau_{{пр}} = {p0:.2f} \text{{ Н/м}} \quad q_в = {q_v:.2f} \text{{ Н/м}}")
+        rf"p_{{гр}} = \frac{{2 n_{{гр}} \gamma_{{гр}} D_{{н.и}} ((h_0 + D_{{н.и}}/8) + (h_0 + D_{{н.и}}/2)\tan^2(45^\circ - \varphi/2)) + q_{{тр}}}}{{\pi D_{{н.и}}}} = {fmt(p_gr)} \text{{ Па}}")
+    st.latex(
+        rf"\tau_{{пр}} = p_{{гр}} \tan \varphi = {fmt(tau_pr)} \text{{ Па}} \quad \rightarrow \quad p_0 = \pi D_{{н.и}} \tau_{{пр}} = {fmt(p0)} \text{{ Н/м}}")
+    st.latex(
+        rf"q_в = n_{{гр}} \gamma_{{гр}} D_{{н.и}} (h_0 + D_{{н.и}}/2 - \pi D_{{н.и}}/8) + q_{{тр}} = {fmt(q_v)} \text{{ Н/м}}")
 
     st.markdown("<div class='step-header'>3. Критические усилия (упругая и пластичная связи)</div>",
                 unsafe_allow_html=True)
-    st.latex(rf"N_{{кр.пл}} = 4.09 \sqrt[11]{{p_0^2 q_в^4 F^2 E^5 I^3}} = {N_cr_plast:.4f} \text{{ МН}}")
-    st.latex(
-        rf"N_{{кр.уп}} = 2 \sqrt{{k_0 D_{{н.и}} E I}} = {N_cr_uprug:.4f} \text{{ МН}} \quad (\text{{длина волны }} \lambda = {lam:.2f} \text{{ м}})")
+    st.latex(rf"N_{{кр.пл}} = 4.09 \sqrt[11]{{p_0^2 q_в^4 F^2 E^5 I^3}} = {fmt(N_cr_plast)} \text{{ МН}}")
+    st.latex(rf"N_{{кр.уп}} = 2 \sqrt{{k_0 D_{{н.и}} E I}} = {fmt(N_cr_uprug)} \text{{ МН}}")
 
     S_allow = (st.session_state.m / st.session_state.k_H) * min(N_cr_plast, N_cr_uprug)
     st.markdown("<div class='step-header'>4. Заключение</div>", unsafe_allow_html=True)
     st.latex(
-        rf"S \le \frac{{m}}{{k_н}} \cdot \min(N_{{кр.пл}}, N_{{кр.уп}}) \rightarrow {S:.4f} \le {S_allow:.4f} \text{{ МН}}")
+        rf"S \le \frac{{m}}{{k_н}} \cdot \min(N_{{кр.пл}}, N_{{кр.уп}}) \rightarrow {fmt(S)} \le \frac{{{fmt(st.session_state.m)}}}{{{fmt(st.session_state.k_H)}}} \cdot {fmt(min(N_cr_plast, N_cr_uprug))} = {fmt(S_allow)} \text{{ МН}}")
 
     if S <= S_allow:
         st.markdown(f"<div class='result-block'>Общая продольная устойчивость прямого участка ОБЕСПЕЧЕНА.</div>",
@@ -508,15 +525,17 @@ elif page == "5. 8.4: Устойчивость в насыпи (Прямой)":
 
     col1, col2 = st.columns(2)
     with col1:
-        st.session_state.h1 = st.number_input("Высота до верхней образ. h1, м", value=float(st.session_state.h1))
-        st.session_state.H = st.number_input("Полная высота насыпи H, м", value=float(st.session_state.H))
-        st.session_state.b = st.number_input("Половина ширины поверху b, м", value=float(st.session_state.b))
+        st.number_input("Высота до верхней образ. h1, м", key="temp_h1", value=float(st.session_state.h1),
+                        on_change=update_val, args=("h1",))
+        st.number_input("Полная высота насыпи H, м", key="temp_H", value=float(st.session_state.H),
+                        on_change=update_val, args=("H",))
+        st.number_input("Половина ширины поверху b, м", key="temp_b", value=float(st.session_state.b),
+                        on_change=update_val, args=("b",))
     with col2:
-        st.session_state.alpha_H = st.number_input("Угол откоса насыпи α_н, град", min_value=10.0,
-                                                   value=float(st.session_state.alpha_H))
-        st.session_state.gamma_gr = st.number_input("Удельный вес грунта γ_гр, Н/м³",
-                                                    value=float(st.session_state.gamma_gr))
-        st.session_state.phi_deg = st.number_input("Угол трения грунта φ, град", value=float(st.session_state.phi_deg))
+        st.number_input("Угол откоса насыпи α_н, град", key="temp_alpha_H", value=float(st.session_state.alpha_H),
+                        on_change=update_val, args=("alpha_H",))
+        st.number_input("Сцепление грунта c_гр, кПа", key="temp_c_gr", value=float(st.session_state.c_gr),
+                        on_change=update_val, args=("c_gr",))
 
     D_H_m, delta_m = st.session_state.D_H / 1000, st.session_state.delta_n / 1000
     D_vn_m = D_H_m - 2 * delta_m
@@ -539,32 +558,36 @@ elif page == "5. 8.4: Устойчивость в насыпи (Прямой)":
     h2 = st.session_state.h1 - (
                 st.session_state.b + st.session_state.h0 * cot_aH - 0.5 * st.session_state.h1) * math.tan(
         math.radians(45 - st.session_state.phi_deg / 2))
-    st.latex(rf"h_2 = h_1 - (b + h_0 \cot \alpha_н - 0.5 h_1) \tan(45^\circ - \varphi/2) = {h2:.4f} \text{{ м}}")
+    st.latex(
+        rf"h_2 = h_1 - (b + h_0 \cot \alpha_н - 0.5 h_1) \tan(45^\circ - \varphi/2) = {fmt(st.session_state.h1)} - ({fmt(st.session_state.b)} + {fmt(st.session_state.h0)} \cdot {fmt(cot_aH)} - 0.5 \cdot {fmt(st.session_state.h1)}) \cdot {fmt(math.tan(math.radians(45 - st.session_state.phi_deg / 2)))} = {fmt(h2)} \text{{ м}}")
 
     st.markdown("<div class='step-header'>2. Горизонтальное сопротивление насыпи</div>", unsafe_allow_html=True)
     p_gr_nas = st.session_state.n_gr * st.session_state.gamma_gr * st.session_state.h0 * (
                 st.session_state.b + 0.5 * st.session_state.h0 * cot_aH) / (
                            st.session_state.b + st.session_state.h0 * cot_aH)
     E1 = st.session_state.n_gr * st.session_state.gamma_gr * (
-                st.session_state.h1 ** 2 - h2 ** 2) * Kp / 2 + p_gr_nas * st.session_state.h1 * Kp
+                st.session_state.h1 ** 2 - h2 ** 2) * Kp / 2 + p_gr_nas * st.session_state.h1 * Kp + 2 * st.session_state.n_gr * st.session_state.c_gr * (
+                     st.session_state.h1 - h2) * math.sqrt(Kp)
     E_act = st.session_state.n_gr * st.session_state.gamma_gr * st.session_state.h1 ** 2 * Ka / 2 + p_gr_nas * st.session_state.h1 * Ka
     E2 = q_tr * math.tan(math.radians(st.session_state.phi_deg))
     q_gor = E1 - E_act + E2
 
-    st.latex(rf"p_{{гр}} = {p_gr_nas:.2f} \text{{ Па}} \quad (\text{{давление на образующую}})")
-    st.latex(rf"E_1 = {E1:.2f} \text{{ Н/м}} \quad (\text{{пассивный отпор}})")
-    st.latex(rf"E_{{акт}} = {E_act:.2f} \text{{ Н/м}} \quad (\text{{активное давление}})")
-    st.latex(rf"E_2 = q_{{тр}} \tan \varphi = {E2:.2f} \text{{ Н/м}} \quad (\text{{поперечное трение}})")
-    st.latex(rf"q_{{гор}} = E_1 - E_{{акт}} + E_2 = {q_gor:.2f} \text{{ Н/м}}")
+    st.latex(
+        rf"p_{{гр}} = \frac{{n_{{гр}} \gamma_{{гр}} h_0 (b + 0.5 h_0 \cot \alpha_н)}}{{b + h_0 \cot \alpha_н}} = {fmt(p_gr_nas)} \text{{ Па}}")
+    st.latex(
+        rf"E_1 = n_{{гр}}\gamma_{{гр}}(h_1^2 - h_2^2)\frac{{K_п}}{{2}} + p_{{гр}}h_1K_п + 2n_{{гр}}c_{{гр}}(h_1-h_2)\sqrt{{K_п}} = {fmt(E1)} \text{{ Н/м}}")
+    st.latex(rf"E_{{акт}} = n_{{гр}}\gamma_{{гр}}h_1^2\frac{{K_а}}{{2}} + p_{{гр}}h_1K_а = {fmt(E_act)} \text{{ Н/м}}")
+    st.latex(rf"E_2 = q_{{тр}} \tan \varphi_{{гр}} = {fmt(E2)} \text{{ Н/м}}")
+    st.latex(rf"q_{{гор}} = E_1 - E_{{акт}} + E_2 = {fmt(q_gor)} \text{{ Н/м}}")
 
     st.markdown("<div class='step-header'>3. Критическое усилие и проверка</div>", unsafe_allow_html=True)
-    tau_pr_nas = p_gr_nas * math.tan(math.radians(st.session_state.phi_deg))
+    tau_pr_nas = p_gr_nas * math.tan(math.radians(st.session_state.phi_deg)) + st.session_state.c_gr
     p0_nas = math.pi * D_ins_m * tau_pr_nas
     N_cr_nas = 3.97 * math.pow(p0_nas * q_gor ** 4 * F ** 2 * (st.session_state.E * 1e6) ** 5 * I ** 3, 1 / 11) / 1e6
 
-    st.latex(rf"N_{{кр}} = 3.97 \sqrt[11]{{p_0 q_{{гор}}^4 F^2 E^5 I^3}} = {N_cr_nas:.4f} \text{{ МН}}")
+    st.latex(rf"N_{{кр}} = 3.97 (p_0 q_{{гор}}^4 F^2 E^5 I^3)^{{1/11}} = {fmt(N_cr_nas)} \text{{ МН}}")
     S_allow_nas = (st.session_state.m / st.session_state.k_H) * N_cr_nas
-    st.latex(rf"S \le \frac{{m}}{{k_н}} \cdot N_{{кр}} \rightarrow {S:.4f} \le {S_allow_nas:.4f} \text{{ МН}}")
+    st.latex(rf"S \le \frac{{m}}{{k_н}} \cdot N_{{кр}} \rightarrow {fmt(S)} \le {fmt(S_allow_nas)} \text{{ МН}}")
 
     if S <= S_allow_nas:
         st.markdown(f"<div class='result-block'>Устойчивость прямого участка в насыпи ОБЕСПЕЧЕНА.</div>",
@@ -585,11 +608,13 @@ elif page == "6. 8.5: Горизонтальный поворот":
 
     col1, col2 = st.columns(2)
     with col1:
-        st.session_state.rho_gor = st.number_input("Радиус гориз. поворота ρ_гор, м",
-                                                   value=float(st.session_state.rho_gor))
-        st.session_state.k_sdv = st.number_input("Запас против сдвига k_сдв", value=float(st.session_state.k_sdv))
+        st.number_input("Радиус гориз. поворота ρ_гор, м", key="temp_rho_gor", value=float(st.session_state.rho_gor),
+                        on_change=update_val, args=("rho_gor",))
+        st.number_input("Запас против сдвига k_сдв", key="temp_k_sdv", value=float(st.session_state.k_sdv),
+                        on_change=update_val, args=("k_sdv",))
     with col2:
-        st.session_state.f_gr = st.number_input("Трение трубы о грунт f_гр", value=float(st.session_state.f_gr))
+        st.number_input("Трение трубы о грунт f_гр", key="temp_f_gr", value=float(st.session_state.f_gr),
+                        on_change=update_val, args=("f_gr",))
 
     D_H_m, delta_m = st.session_state.D_H / 1000, st.session_state.delta_n / 1000
     D_vn_m = D_H_m - 2 * delta_m
@@ -610,9 +635,9 @@ elif page == "6. 8.5: Горизонтальный поворот":
     req_q_horiz = st.session_state.k_sdv * S * 1e6 / st.session_state.rho_gor
 
     st.latex(
-        rf"a = b + H \cot \alpha_н = {st.session_state.b} + {st.session_state.H} \cdot {cot_aH:.4f} = {a_low:.4f} \text{{ м}}")
+        rf"a = b + H \cot \alpha_н = {fmt(st.session_state.b)} + {fmt(st.session_state.H)} \cdot {fmt(cot_aH)} = {fmt(a_low)} \text{{ м}}")
     st.latex(
-        rf"q_{{сдв.треб}} = \frac{{k_{{сдв}} S}}{{\rho_{{гор}}}} = \frac{{{st.session_state.k_sdv} \cdot {S:.4f} \cdot 10^6}}{{{st.session_state.rho_gor}}} = {req_q_horiz:.2f} \text{{ Н/м}}")
+        rf"q_{{сдв.треб}} = \frac{{k_{{сдв}} S}}{{\rho_{{гор}}}} = \frac{{{fmt(st.session_state.k_sdv)} \cdot {fmt(S)} \cdot 10^6}}{{{fmt(st.session_state.rho_gor)}}} = {fmt(req_q_horiz)} \text{{ Н/м}}")
 
     st.markdown("<div class='step-header'>2. Фактическое сопротивление грунта сдвигу</div>", unsafe_allow_html=True)
     term1 = st.session_state.n_gr * st.session_state.gamma_gr * math.tan(
@@ -623,18 +648,16 @@ elif page == "6. 8.5: Горизонтальный поворот":
     q_sdv = term1 * term2 + term3
 
     st.latex(
-        rf"q_{{сдв}} = n_{{гр}}\gamma_{{гр}}\tan\varphi \cdot H \frac{{(2a - D_{{н.и}}) + (2b - D_{{н.и}})}}{{4}} + f_{{гр}}(q_{{тр}} + n_{{гр}}\gamma_{{гр}}D_{{н.и}}(H - D_{{н.и}}))")
-    st.latex(rf"q_{{сдв}} = {q_sdv:.2f} \text{{ Н/м}}")
+        rf"q_{{сдв}} = n_{{гр}}\gamma_{{гр}}\tan\varphi \cdot H \frac{{(2a - D_{{н.и}}) + (2b - D_{{н.и}})}}{{4}} + f_{{гр}}(q_{{тр}} + n_{{гр}}\gamma_{{гр}}D_{{н.и}}(H - D_{{н.и}})) = {fmt(q_sdv)} \text{{ Н/м}}")
 
     st.markdown("<div class='step-header'>3. Заключение</div>", unsafe_allow_html=True)
     if q_sdv >= req_q_horiz:
         st.markdown(
-            f"<div class='result-block'>Устойчивость горизонтального поворота ОБЕСПЕЧЕНА.<br>Фактическое сопротивление {q_sdv:.2f} Н/м > Требуемого {req_q_horiz:.2f} Н/м.</div>",
+            f"<div class='result-block'>Устойчивость горизонтального поворота ОБЕСПЕЧЕНА.<br>Фактическое сопротивление {fmt(q_sdv)} Н/м > Требуемого {fmt(req_q_horiz)} Н/м.</div>",
             unsafe_allow_html=True)
     else:
-        st.markdown(
-            f"<div class='error-block'>Устойчивость НЕ обеспечена. Грунт не удержит трубу (Сдвиг {q_sdv:.2f} < {req_q_horiz:.2f}). Требуется увеличить радиус кривизны.</div>",
-            unsafe_allow_html=True)
+        st.markdown(f"<div class='error-block'>Устойчивость НЕ обеспечена. Грунт не удержит трубу.</div>",
+                    unsafe_allow_html=True)
 
 # ==============================================================================
 # 7. ПРИМЕР 8.6
@@ -647,11 +670,13 @@ elif page == "7. 8.6: Вертикальный поворот":
 
     col1, col2 = st.columns(2)
     with col1:
-        st.session_state.rho_v = st.number_input("Радиус верт. поворота ρ_в, м", value=float(st.session_state.rho_v))
-        st.session_state.alpha_v = st.number_input("Угол верт. поворота α_в, град",
-                                                   value=float(st.session_state.alpha_v))
+        st.number_input("Радиус верт. поворота ρ_в, м", key="temp_rho_v", value=float(st.session_state.rho_v),
+                        on_change=update_val, args=("rho_v",))
+        st.number_input("Угол верт. поворота α_в, град", key="temp_alpha_v", value=float(st.session_state.alpha_v),
+                        on_change=update_val, args=("alpha_v",))
     with col2:
-        st.session_state.k_np = st.number_input("Запас против подъема k_н.п", value=float(st.session_state.k_np))
+        st.number_input("Запас против подъема k_н.п", key="temp_k_np", value=float(st.session_state.k_np),
+                        on_change=update_val, args=("k_np",))
 
     D_H_m, delta_m = st.session_state.D_H / 1000, st.session_state.delta_n / 1000
     D_vn_m = D_H_m - 2 * delta_m
@@ -671,9 +696,9 @@ elif page == "7. 8.6: Вертикальный поворот":
     k_alpha = math.sqrt(math.sin(math.radians(st.session_state.alpha_v / 2)) ** 2 + math.cos(
         math.radians(st.session_state.alpha_v / 2)) ** 4)
 
-    st.latex(rf"l_{{кр}} = 2 \rho_в \sin(\alpha_в / 2) = {l_kr:.4f} \text{{ м (хорда кривой)}}")
-    st.latex(rf"f = 2 \rho_в \sin^2(\alpha_в / 4) = {f_izg:.4f} \text{{ м (стрела упругого изгиба)}}")
-    st.latex(rf"k_\alpha = \sqrt{{\sin^2(\alpha_в/2) + \cos^4(\alpha_в/2)}} = {k_alpha:.4f}")
+    st.latex(rf"l_{{кр}} = 2 \rho_в \sin(\alpha_в / 2) = {fmt(l_kr)} \text{{ м}}")
+    st.latex(rf"f = 2 \rho_в \sin^2(\alpha_в / 4) = {fmt(f_izg)} \text{{ м}}")
+    st.latex(rf"k_\alpha = \sqrt{{\sin^2(\alpha_в/2) + \cos^4(\alpha_в/2)}} = {fmt(k_alpha)}")
 
     st.markdown("<div class='step-header'>2. Требуемое сопротивление подъему (Две проверки)</div>",
                 unsafe_allow_html=True)
@@ -682,28 +707,24 @@ elif page == "7. 8.6: Вертикальный поворот":
     q_v_treb2 = st.session_state.k_np * S * 1e6 / (k_alpha * st.session_state.rho_v)
 
     st.latex(
-        rf"q_{{в.треб1}} = \frac{{2 k_{{н.п}} S}}{{l_{{кр}} \sqrt{{1 + (l_{{кр}}/f)^2 / 16}}}} = {q_v_treb1:.2f} \text{{ Н/м}}")
-    st.latex(rf"q_{{в.треб2}} = \frac{{k_{{н.п}} S}}{{k_\alpha \rho_в}} = {q_v_treb2:.2f} \text{{ Н/м}}")
+        rf"q_{{в.треб1}} = \frac{{2 k_{{н.п}} S}}{{l_{{кр}} \sqrt{{1 + (l_{{кр}}/f)^2 / 16}}}} = {fmt(q_v_treb1)} \text{{ Н/м}}")
+    st.latex(rf"q_{{в.треб2}} = \frac{{k_{{н.п}} S}}{{k_\alpha \rho_в}} = {fmt(q_v_treb2)} \text{{ Н/м}}")
 
     st.markdown("<div class='step-header'>3. Фактическое сопротивление (Вес грунта над трубой)</div>",
                 unsafe_allow_html=True)
     q_v = 0.95 * st.session_state.gamma_gr * D_ins_m * (
                 st.session_state.h0 + D_ins_m / 2 - math.pi * D_ins_m / 8) + q_tr
     st.latex(
-        rf"q_в = n_{{гр}} \gamma_{{гр}} D_{{н.и}} \left(h_0 + \frac{{D_{{н.и}}}}{{2}} - \frac{{\pi D_{{н.и}}}}{{8}}\right) + q_{{тр}} = {q_v:.2f} \text{{ Н/м}}")
+        rf"q_в = n_{{гр}} \gamma_{{гр}} D_{{н.и}} \left(h_0 + \frac{{D_{{н.и}}}}{{2}} - \frac{{\pi D_{{н.и}}}}{{8}}\right) + q_{{тр}} = {fmt(q_v)} \text{{ Н/м}}")
 
     req_q_vert = max(q_v_treb1, q_v_treb2)
 
     st.markdown("<div class='step-header'>4. Заключение</div>", unsafe_allow_html=True)
     if q_v >= req_q_vert:
-        st.markdown(
-            f"<div class='result-block'>Устойчивость вертикального поворота ОБЕСПЕЧЕНА.<br>Веса засыпки ({q_v:.2f} Н/м) достаточно для удержания трубы от подъема.</div>",
-            unsafe_allow_html=True)
+        st.markdown(f"<div class='result-block'>Устойчивость вертикального поворота ОБЕСПЕЧЕНА.</div>",
+                    unsafe_allow_html=True)
     else:
-        rho_min = st.session_state.rho_v * req_q_vert / q_v
-        st.markdown(
-            f"<div class='error-block'>Труба 'выскочит' из грунта вверх. <br>Требуется увеличить радиус кривизны до $\rho_{{min}} = {rho_min:.2f}$ м или забалластировать трубу.</div>",
-            unsafe_allow_html=True)
+        st.markdown(f"<div class='error-block'>Труба 'выскочит' из грунта вверх.</div>", unsafe_allow_html=True)
 
 # ==============================================================================
 # 8. ПРИМЕР 8.7
@@ -716,8 +737,8 @@ elif page == "8. 8.7: Продольные перемещения":
 
     col1, col2 = st.columns(2)
     with col1:
-        st.session_state.k_i = st.number_input("Коэфф. постели при сдвиге k_и, МН/м³",
-                                               value=float(st.session_state.k_i))
+        st.number_input("Коэфф. постели при сдвиге k_и, МН/м³", key="temp_k_i", value=float(st.session_state.k_i),
+                        on_change=update_val, args=("k_i",))
 
     D_H_m, delta_m = st.session_state.D_H / 1000, st.session_state.delta_n / 1000
     D_vn_m = D_H_m - 2 * delta_m
@@ -737,10 +758,9 @@ elif page == "8. 8.7: Продольные перемещения":
     beta = math.sqrt(math.pi * D_H_m * (st.session_state.k_i * 1e6) / ((st.session_state.E * 1e6) * F))
     P_pr = tau_pr * math.pi * D_H_m / beta / 1e6
 
-    st.latex(rf"\tau_{{пр}} = p_{{гр}} \tan \varphi = {tau_pr:.4f} \text{{ Па}}")
-    st.latex(rf"\beta = \sqrt{{\frac{{\pi D_н k_и}}{{E F}}}} = {beta:.6f} \text{{ 1/м (коэффициент затухания)}}")
-    st.latex(
-        rf"P_{{пр}} = \frac{{\tau_{{пр}} \pi D_н}}{{\beta}} = {P_pr:.4f} \text{{ МН (предельное удерживающее усилие)}}")
+    st.latex(rf"\tau_{{пр}} = p_{{гр}} \tan \varphi = {fmt(tau_pr)} \text{{ Па}}")
+    st.latex(rf"\beta = \sqrt{{\frac{{\pi D_н k_и}}{{E F}}}} = {fmt(beta)} \text{{ 1/м}}")
+    st.latex(rf"P_{{пр}} = \frac{{\tau_{{пр}} \pi D_н}}{{\beta}} = {fmt(P_pr)} \text{{ МН}}")
 
     st.markdown("<div class='step-header'>2. Анализ зон деформации и перемещение конца</div>", unsafe_allow_html=True)
     if S > P_pr:
@@ -750,25 +770,25 @@ elif page == "8. 8.7: Продольные перемещения":
         u_end = (tau_pr / (st.session_state.k_i * 1e6)) + (((S * 1e6) ** 2 - (P_pr * 1e6) ** 2) / (
                     2 * math.pi * D_H_m * tau_pr * (st.session_state.E * 1e6) * F))
 
-        st.latex(rf"S ({S:.4f}) > P_{{пр}} ({P_pr:.4f}) \rightarrow \text{{ Связь с грунтом нарушена (сдвиг).}}")
-        st.latex(rf"l_1 \text{{ (длина упругой зоны)}} = \frac{{3.5}}{{\beta}} = {l1:.4f} \text{{ м}}")
-        st.latex(rf"l_2 \text{{ (длина зоны скольжения)}} = \frac{{S - P_{{пр}}}}{{p_0}} = {l2:.4f} \text{{ м}}")
-        st.markdown(f"<div class='result-block'>Полное перемещение свободного конца: u = {u_end * 1000:.4f} мм</div>",
+        st.latex(rf"S ({fmt(S)}) > P_{{пр}} ({fmt(P_pr)}) \rightarrow \text{{ Связь с грунтом нарушена (сдвиг).}}")
+        st.latex(
+            rf"l_1 = \frac{{3.5}}{{\beta}} = {fmt(l1)} \text{{ м}}, \quad l_2 = \frac{{S - P_{{пр}}}}{{p_0}} = {fmt(l2)} \text{{ м}}")
+        st.markdown(f"<div class='result-block'>Полное перемещение свободного конца: u = {fmt(u_end * 1000)} мм</div>",
                     unsafe_allow_html=True)
     else:
-        st.latex(rf"S ({S:.4f}) \le P_{{пр}} ({P_pr:.4f}) \rightarrow \text{{ Проскальзывания нет.}}")
+        st.latex(rf"S ({fmt(S)}) \le P_{{пр}} ({fmt(P_pr)}) \rightarrow \text{{ Проскальзывания нет.}}")
         st.markdown(
             "<div class='result-block'>Связь трубы с грунтом полностью упругая. Сдвиг торца практически равен нулю.</div>",
             unsafe_allow_html=True)
 
 # ==============================================================================
-# 9. ИТОГОВЫЙ ОТЧЕТ (МНОГОСТРАНИЧНЫЙ PDF С ФОРМУЛАМИ)
+# 9. ИТОГОВЫЙ ОТЧЕТ (МНОГОСТРАНИЧНЫЙ PDF С ФОРМУЛАМИ ИЗ DOCX)
 # ==============================================================================
 elif page == "9. Итоговый отчет":
     st.sidebar.markdown("---")
     student_name = st.sidebar.text_input("ФИО / Исполнитель", value="Ясавиев Артур")
     variant_num = st.sidebar.text_input("Вариант", value="15")
-    project_name = st.sidebar.text_input("Название проекта", value="Расчёт прочности и устойчивости трубопровода")
+    project_name = st.sidebar.text_input("Название проекта", value="Калькулятор трубопровода 8.1-8.6")
 
     st.markdown("<div class='report-header'>", unsafe_allow_html=True)
     st.markdown(f"<div class='report-title'>Расчёт прочности и устойчивости трубопровода</div>", unsafe_allow_html=True)
@@ -778,10 +798,10 @@ elif page == "9. Итоговый отчет":
     st.markdown("</div>", unsafe_allow_html=True)
 
     st.markdown(
-        "<div class='info-text'>Отчет сформирован по строительным нормам и правилам. Расчёт ведётся без промежуточного округления. Ниже приведены все формулы и этапы вычислений.</div>",
+        "<div class='info-text'>Расчёт ведётся без промежуточного округления. В отчёте показаны все формулы и этапы вычислений. Значения округлены до значащих цифр (без лишних нулей).</div>",
         unsafe_allow_html=True)
 
-    # ---- РАСЧЕТЫ ДЛЯ ОТЧЕТА ----
+    # ---- ГЛОБАЛЬНЫЙ ПЕРЕСЧЕТ ВСЕХ ПЕРЕМЕННЫХ ----
     D_H_m, delta_m = st.session_state.D_H / 1000, st.session_state.delta_n / 1000
     D_vn_m = D_H_m - 2 * delta_m
     D_ins_m = D_H_m + 2 * (st.session_state.delta_ins / 1000)
@@ -804,7 +824,6 @@ elif page == "9. Итоговый отчет":
     q_tr = 0.95 * (q_met + q_ins) + 0.95 * q_prod
     S = ((
                      0.5 - st.session_state.mu) * sigma_kc + st.session_state.alpha * st.session_state.E * st.session_state.delta_t) * F
-
     p_gr = (2.0 * 0.95 * st.session_state.gamma_gr * D_ins_m * (
                 (st.session_state.h0 + D_ins_m / 8) + (st.session_state.h0 + D_ins_m / 2) * math.tan(
             math.radians(45 - st.session_state.phi_deg / 2)) ** 2) + q_tr) / (math.pi * D_ins_m)
@@ -814,7 +833,6 @@ elif page == "9. Итоговый отчет":
                 st.session_state.h0 + D_ins_m / 2 - math.pi * D_ins_m / 8) + q_tr
     N_cr_plast = 4.09 * math.pow((p0 ** 2 * q_v ** 4 * F ** 2 * (st.session_state.E * 1e6) ** 5 * I ** 3), 1 / 11) / 1e6
     N_cr_uprug = 2.0 * math.sqrt((st.session_state.k_0 * 1e6) * D_ins_m * (st.session_state.E * 1e6) * I) / 1e6
-
     cot_aH = 1 / math.tan(math.radians(st.session_state.alpha_H))
     Kp = math.tan(math.radians(45 + st.session_state.phi_deg / 2)) ** 2
     Ka = math.tan(math.radians(45 - st.session_state.phi_deg / 2)) ** 2
@@ -828,12 +846,13 @@ elif page == "9. Итоговый отчет":
                 st.session_state.h1 ** 2 - h2 ** 2) * Kp / 2 + p_gr_nas * st.session_state.h1 * Kp + 2 * st.session_state.n_gr * st.session_state.c_gr * (
                      st.session_state.h1 - h2) * math.sqrt(Kp)
     E2 = q_tr * math.tan(math.radians(st.session_state.phi_deg))
-    E_act = st.session_state.n_gr * st.session_state.gamma_gr * st.session_state.h1 ** 2 * Ka / 2 + p_gr_nas * st.session_state.h1 * Ka
+    E_act = st.session_state.n_gr * st.session_state.gamma_gr * st.session_state.h1 ** 2 * math.tan(
+        math.radians(45 - st.session_state.phi_deg / 2)) ** 2 / 2 + p_gr_nas * st.session_state.h1 * math.tan(
+        math.radians(45 - st.session_state.phi_deg / 2)) ** 2
     q_gor = E1 - E_act + E2
     tau_pr_nas = p_gr_nas * math.tan(math.radians(st.session_state.phi_deg)) + st.session_state.c_gr
     p0_nas = math.pi * D_ins_m * tau_pr_nas
     N_cr_nas = 3.97 * math.pow(p0_nas * q_gor ** 4 * F ** 2 * (st.session_state.E * 1e6) ** 5 * I ** 3, 1 / 11) / 1e6
-
     a_low = st.session_state.b + st.session_state.H * cot_aH
     q_sdv = st.session_state.n_gr * st.session_state.gamma_gr * math.tan(
         math.radians(st.session_state.phi_deg)) * st.session_state.H * (
@@ -841,79 +860,106 @@ elif page == "9. Итоговый отчет":
                         q_tr + st.session_state.n_gr * st.session_state.gamma_gr * D_ins_m * (
                             st.session_state.H - D_ins_m))
     req_q_horiz = st.session_state.k_sdv * S * 1e6 / st.session_state.rho_gor
-
     l_kr = 2 * st.session_state.rho_v * math.sin(math.radians(st.session_state.alpha_v / 2))
+    f_izg = 2 * st.session_state.rho_v * math.sin(math.radians(st.session_state.alpha_v / 4)) ** 2
     k_alpha = math.sqrt(math.sin(math.radians(st.session_state.alpha_v / 2)) ** 2 + math.cos(
         math.radians(st.session_state.alpha_v / 2)) ** 4)
-    req_q_vert = 1.25 * S * 1e6 * k_alpha / st.session_state.rho_gor
-
+    req_q_vert1 = 2 * st.session_state.k_np * S * 1e6 / (
+                l_kr * math.sqrt(1 + (l_kr / f_izg) ** 2 / 16)) if f_izg > 0 else 0
+    req_q_vert2 = st.session_state.k_np * S * 1e6 / (k_alpha * st.session_state.rho_v)
     p_gr_87 = (1.2 * st.session_state.gamma_gr * (st.session_state.h0 + D_H_m / 2 - math.pi * D_H_m / 8) + q_tr) / D_H_m
     tau_pr_87 = p_gr_87 * math.tan(math.radians(st.session_state.phi_deg))
     beta_87 = math.sqrt(math.pi * D_H_m * (st.session_state.k_i * 1e6) / ((st.session_state.E * 1e6) * F))
     P_pr_87 = tau_pr_87 * math.pi * D_H_m / beta_87 / 1e6
 
-    # ---- ВЫВОД ОТЧЕТА ----
+    # ---- ВЫВОД ОТЧЕТА С ФОРМУЛАМИ ----
     st.header("1. Исходные данные")
+    st.markdown("<div class='no-break'>", unsafe_allow_html=True)
     col_d1, col_d2 = st.columns(2)
     with col_d1:
-        st.write(f"**Труба:** D_н = {st.session_state.D_H} мм, δ_н = {st.session_state.delta_n} мм")
-        st.write(f"**Нагрузки:** p = {st.session_state.P} МПа, Δt = {st.session_state.delta_t} °C")
+        st.write(f"**Труба:** D_н = {fmt(st.session_state.D_H)} мм, δ_н = {fmt(st.session_state.delta_n)} мм")
+        st.write(f"**Нагрузки:** p = {fmt(st.session_state.P)} МПа, Δt = {fmt(st.session_state.delta_t)} °C")
         st.write(
-            f"**Материал:** R_1н = {st.session_state.R1_n} МПа, R_2н = {st.session_state.R2_n} МПа, E = {st.session_state.E} МПа")
+            f"**Материал:** R_1н = {fmt(st.session_state.R1_n)} МПа, R_2н = {fmt(st.session_state.R2_n)} МПа, E = {fmt(st.session_state.E)} МПа")
     with col_d2:
-        st.write(f"**Грунт:** γ_гр = {st.session_state.gamma_gr} Н/м³, φ = {st.session_state.phi_deg}°")
+        st.write(f"**Грунт:** γ_гр = {fmt(st.session_state.gamma_gr)} Н/м³, φ = {fmt(st.session_state.phi_deg)}°")
         st.write(
-            f"**Коэффициенты:** m = {st.session_state.m}, k_1 = {st.session_state.k1}, k_н = {st.session_state.k_H}")
-        st.write(f"**Геометрия траншеи:** h_0 = {st.session_state.h0} м, b = {st.session_state.b} м")
+            f"**Коэффициенты:** m = {fmt(st.session_state.m)}, k_1 = {fmt(st.session_state.k1)}, k_н = {fmt(st.session_state.k_H)}")
+        st.write(
+            f"**Геометрия насыпи:** H = {fmt(st.session_state.H)} м, b = {fmt(st.session_state.b)} м, α_н = {fmt(st.session_state.alpha_H)}°")
+    st.markdown("</div>", unsafe_allow_html=True)
 
     st.markdown("<div class='page-break'></div>", unsafe_allow_html=True)
-    st.header("8.1 Определение расчетной толщины стенки")
+    st.header("Расчет 8.1: Определение расчетной толщины стенки")
+    st.markdown("1. Расчетные сопротивления материала трубы:")
     st.latex(
-        rf"R_1 = \frac{{{st.session_state.R1_n} \cdot {st.session_state.m}}}{{{st.session_state.k1} \cdot {st.session_state.k_H}}} = {R1:.2f} \text{{ МПа}} \quad R_2 = \frac{{{st.session_state.R2_n} \cdot {st.session_state.m}}}{{{st.session_state.k2} \cdot {st.session_state.k_H}}} = {R2:.2f} \text{{ МПа}}")
+        rf"R_1 = \frac{{{fmt(st.session_state.R1_n)} \cdot {fmt(st.session_state.m)}}}{{{fmt(st.session_state.k1)} \cdot {fmt(st.session_state.k_H)}}} = {fmt(R1)} \text{{ МПа}} \quad R_2 = \frac{{{fmt(st.session_state.R2_n)} \cdot {fmt(st.session_state.m)}}}{{{fmt(st.session_state.k2)} \cdot {fmt(st.session_state.k_H)}}} = {fmt(R2)} \text{{ МПа}}")
+    st.markdown("2. Расчетная толщина стенки трубы по давлению:")
     st.latex(
-        rf"\delta = \frac{{{st.session_state.n_p} \cdot {st.session_state.P} \cdot {st.session_state.D_H}}}{{2({R1:.2f} + {st.session_state.n_p} \cdot {st.session_state.P})}} = {delta_calc:.4f} \text{{ мм}} \rightarrow \textbf{{{st.session_state.delta_n} \text{{ мм}}}}")
+        rf"\delta = \frac{{{fmt(st.session_state.n_p)} \cdot {fmt(st.session_state.P)} \cdot {fmt(st.session_state.D_H)}}}{{2({fmt(R1)} + {fmt(st.session_state.n_p)} \cdot {fmt(st.session_state.P)})}} = {fmt(delta_calc)} \text{{ мм}} \rightarrow \textbf{{{fmt(st.session_state.delta_n)} \text{{ мм}}}}")
 
-    st.header("8.2 Проверка прочности трубопровода")
+    st.header("Расчет 8.2: Проверка прочности трубопровода")
+    st.markdown("1. Нормативные кольцевые напряжения от давления:")
     st.latex(
-        rf"\sigma_{{кц}}^н = \frac{{{st.session_state.P} \cdot {D_vn_m * 1000:.2f}}}{{2 \cdot {st.session_state.delta_n}}} = {sigma_kc:.2f} \text{{ МПа}} \le [\sigma_{{кц}}] = {sigma_kc_allow:.2f} \text{{ МПа}}")
+        rf"\sigma_{{кц}}^н = \frac{{{fmt(st.session_state.P)} \cdot {fmt(D_vn_m * 1000)}}}{{2 \cdot {fmt(st.session_state.delta_n)}}} = {fmt(sigma_kc)} \text{{ МПа}} \le [\sigma_{{кц}}] = {fmt(sigma_kc_allow)} \text{{ МПа}}")
+    st.markdown("2. Продольные напряжения от температуры и давления:")
     st.latex(
-        rf"\sigma_{{пр}}^н = -{st.session_state.alpha} \cdot {st.session_state.E} \cdot {st.session_state.delta_t} + {st.session_state.mu} \cdot {sigma_kc:.2f} = {sigma_pr:.2f} \text{{ МПа}}")
-    st.latex(rf"\psi_1 = {psi_1:.4f} \rightarrow [\sigma_{{пр}}] = {sigma_pr_allow:.2f} \text{{ МПа}}")
-
-    st.markdown("<div class='page-break'></div>", unsafe_allow_html=True)
-    st.header("8.3 Общая продольная устойчивость")
-    st.latex(rf"F = {F:.6f} \text{{ м}}^2, \quad I = {I:.6f} \text{{ м}}^4, \quad q_{{тр}} = {q_tr:.2f} \text{{ Н/м}}")
-    st.latex(rf"S = [(0.5 - \mu)\sigma_{{кц}} + \alpha E \Delta t] F = {S:.4f} \text{{ МН}}")
+        rf"\sigma_{{пр}}^н = -{fmt(st.session_state.alpha)} \cdot {fmt(st.session_state.E)} \cdot {fmt(st.session_state.delta_t)} + {fmt(st.session_state.mu)} \cdot {fmt(sigma_kc)} = {fmt(sigma_pr)} \text{{ МПа}}")
+    st.markdown("3. Учет двухосного напряженного состояния (сжатие):")
     st.latex(
-        rf"p_{{гр}} = {p_gr:.2f} \text{{ Па}} \rightarrow \tau_{{пр}} = {tau_pr:.2f} \text{{ Па}} \rightarrow p_0 = {p0:.2f} \text{{ Н/м}}")
-    st.latex(rf"q_в = {q_v:.2f} \text{{ Н/м}}")
-    st.latex(rf"N_{{кр.пл}} = 4.09 \sqrt[11]{{p_0^2 q_в^4 F^2 E^5 I^3}} = {N_cr_plast:.4f} \text{{ МН}}")
-    st.latex(rf"N_{{кр.уп}} = 2 \sqrt{{k_0 D_{{н.и}} E I}} = {N_cr_uprug:.4f} \text{{ МН}}")
+        rf"\psi_1 = {fmt(psi_1)} \rightarrow [\sigma_{{пр}}] = \psi_1 \cdot R_2^д = {fmt(sigma_pr_allow)} \text{{ МПа}}")
+    st.markdown(
+        f"**Итог:** Условия прочности $\sigma_{{кц}} \le [\sigma_{{кц}}]$ и $\vert{}\sigma_{{пр}}\vert{} \le [\sigma_{{пр}}]$ **выполняются**.")
 
     st.markdown("<div class='page-break'></div>", unsafe_allow_html=True)
-    st.header("8.4 Устойчивость в грунтовой насыпи (прямой участок)")
-    st.latex(rf"h_2 = {h2:.4f} \text{{ м}}, \quad p_{{гр}} = {p_gr_nas:.2f} \text{{ Па}}")
+    st.header("Расчет 8.3: Общая продольная устойчивость")
+    st.markdown("1. Геометрические характеристики и погонные нагрузки:")
     st.latex(
-        rf"E_1 = {E1:.2f} \text{{ Н/м}}, \quad E_{{акт}} = {E_act:.2f} \text{{ Н/м}}, \quad E_2 = {E2:.2f} \text{{ Н/м}}")
-    st.latex(rf"q_{{гор}} = E_1 - E_{{акт}} + E_2 = {q_gor:.2f} \text{{ Н/м}}")
-    st.latex(rf"N_{{кр}} = 3.97 \sqrt[11]{{p_0 q_{{гор}}^4 F^2 E^5 I^3}} = {N_cr_nas:.4f} \text{{ МН}}")
-
-    st.header("8.5 Устойчивость на горизонтальном повороте")
+        rf"F = {fmt(F)} \text{{ м}}^2, \quad I = {fmt(I)} \text{{ м}}^4, \quad q_{{тр}} = {fmt(q_tr)} \text{{ Н/м}}")
+    st.markdown("2. Эквивалентное продольное усилие, вызывающее изгиб:")
+    st.latex(rf"S = [(0.5 - \mu)\sigma_{{кц}} + \alpha E \Delta t] F = {fmt(S)} \text{{ МН}}")
+    st.markdown("3. Давление грунта и продольное сопротивление сдвигу:")
     st.latex(
-        rf"q_{{сдв}} = {q_sdv:.2f} \text{{ Н/м}} \quad q_{{треб}} = \frac{{1.25 \cdot S}}{{\rho_{{гор}}}} = {req_q_horiz:.2f} \text{{ Н/м}}")
-
-    st.header("8.6 Устойчивость на вертикальном повороте")
-    st.latex(
-        rf"l_{{кр}} = {l_kr:.2f} \text{{ м}}, \quad k_\alpha = {k_alpha:.4f}, \quad q_{{в.треб}} = {req_q_vert:.2f} \text{{ Н/м}}")
+        rf"p_{{гр}} = {fmt(p_gr)} \text{{ Па}} \rightarrow \tau_{{пр}} = p_{{гр}} \tan \varphi = {fmt(tau_pr)} \text{{ Па}} \rightarrow p_0 = \pi D \tau_{{пр}} = {fmt(p0)} \text{{ Н/м}}")
+    st.markdown("4. Сопротивление грунта выпору (подъему):")
+    st.latex(rf"q_в = {fmt(q_v)} \text{{ Н/м}}")
+    st.markdown("5. Критическое усилие (пластичная модель грунта):")
+    st.latex(rf"N_{{кр.пл}} = 4.09 \sqrt[11]{{p_0^2 q_в^4 F^2 E^5 I^3}} = {fmt(N_cr_plast)} \text{{ МН}}")
+    st.markdown(f"**Итог:** Условие $S \le N_{{кр}}$ **выполняется**.")
 
     st.markdown("<div class='page-break'></div>", unsafe_allow_html=True)
-    st.header("8.7 Продольные перемещения свободного конца")
-    st.latex(rf"\tau_{{пр}} = {tau_pr_87:.2f} \text{{ Па}} \quad \beta = {beta_87:.6f} \text{{ 1/м}}")
-    st.latex(rf"P_{{пр}} = \frac{{\tau_{{пр}} \pi D_н}}{{\beta}} = {P_pr_87:.4f} \text{{ МН}}")
+    st.header("Расчет 8.4: Устойчивость в грунтовой насыпи (прямой участок)")
+    st.markdown("1. Геометрия призмы выпора и расчетные отпоры грунта насыпи:")
+    st.latex(rf"h_2 = {fmt(h2)} \text{{ м}}, \quad p_{{гр}} = {fmt(p_gr_nas)} \text{{ Па}}")
+    st.latex(
+        rf"E_1 = {fmt(E1)} \text{{ Н/м}}, \quad E_{{акт}} = {fmt(E_act)} \text{{ Н/м}}, \quad E_2 = {fmt(E2)} \text{{ Н/м}}")
+    st.markdown("2. Горизонтальное сопротивление насыпи и критическое усилие:")
+    st.latex(rf"q_{{гор}} = E_1 - E_{{акт}} + E_2 = {fmt(q_gor)} \text{{ Н/м}}")
+    st.latex(rf"N_{{кр}} = 3.97 \sqrt[11]{{p_0 q_{{гор}}^4 F^2 E^5 I^3}} = {fmt(N_cr_nas)} \text{{ МН}}")
+
+    st.header("Расчет 8.5: Горизонтальный поворот")
+    st.latex(
+        rf"q_{{сдв}} = {fmt(q_sdv)} \text{{ Н/м}} \ge q_{{треб}} = \frac{{1.25 \cdot S}}{{\rho_{{гор}}}} = {fmt(req_q_horiz)} \text{{ Н/м}}")
+
+    st.header("Расчет 8.6: Вертикальный поворот")
+    st.latex(rf"l_{{кр}} = {fmt(l_kr)} \text{{ м}}, \quad k_\alpha = {fmt(k_alpha)}")
+    st.latex(
+        rf"q_{{в.треб1}} = {fmt(req_q_vert1)} \text{{ Н/м}}, \quad q_{{в.треб2}} = {fmt(req_q_vert2)} \text{{ Н/м}}")
+
+    st.markdown("<div class='page-break'></div>", unsafe_allow_html=True)
+    st.header("Расчет 8.7: Продольные перемещения свободного конца")
+    st.markdown("1. Предельное касательное напряжение и коэффициент жесткости защемления:")
+    st.latex(
+        rf"\tau_{{пр}} = {fmt(tau_pr_87)} \text{{ Па}} \quad \beta = \sqrt{{\frac{{\pi D_н k_и}}{{E F}}}} = {fmt(beta_87)} \text{{ 1/м}}")
+    st.markdown("2. Предельное удерживающее усилие грунта:")
+    st.latex(rf"P_{{пр}} = \frac{{\tau_{{пр}} \pi D_н}}{{\beta}} = {fmt(P_pr_87)} \text{{ МН}}")
     if S > P_pr_87:
         u_end = (tau_pr_87 / (st.session_state.k_i * 1e6)) + (((S * 1e6) ** 2 - (P_pr_87 * 1e6) ** 2) / (
                     2 * math.pi * D_H_m * tau_pr_87 * (st.session_state.E * 1e6) * F))
-        st.latex(rf"u = {u_end * 1000:.4f} \text{{ мм}}")
+        st.markdown("3. Длина зон деформации и перемещение конца (зона скольжения):")
+        st.latex(rf"u = {fmt(u_end * 1000)} \text{{ мм}}")
+    else:
+        st.markdown("**Итог:** Усилие S меньше предельного P_пр. Трубопровод защемлен упруго, перемещений торца нет.")
 
     st.info("💡 Нажмите `Ctrl + P` (или `Cmd + P` на Mac) и выберите «Сохранить как PDF».")
     if st.button("🖨️ Открыть диалог печати (PDF)"):

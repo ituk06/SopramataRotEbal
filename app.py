@@ -42,7 +42,9 @@ CLIMATE_DATA = {
     "г. Новосибирск": {"t_min": -39.0, "t_max": 29.0, "lat": 55.0084, "lon": 82.9357, "snow": 4, "wind": 3},
     "г. Иркутск": {"t_min": -36.0, "t_max": 28.0, "lat": 52.2978, "lon": 104.296, "snow": 2, "wind": 3},
     "г. Владивосток": {"t_min": -24.0, "t_max": 27.0, "lat": 43.1198, "lon": 131.886, "snow": 2, "wind": 4},
+    "г. Норильск": {"t_min": -47.0, "t_max": 24.0, "lat": 69.3558, "lon": 88.1893, "snow": 5, "wind": 4},
     "г. Тюмень": {"t_min": -35.0, "t_max": 27.0, "lat": 57.1522, "lon": 65.5272, "snow": 3, "wind": 2},
+    "г. Астрахань": {"t_min": -23.0, "t_max": 33.0, "lat": 46.3497, "lon": 48.0326, "snow": 1, "wind": 3},
     "г. Краснодар": {"t_min": -15.0, "t_max": 35.0, "lat": 45.0393, "lon": 38.9806, "snow": 2, "wind": 3},
     "г. Мурманск": {"t_min": -28.0, "t_max": 20.0, "lat": 68.9585, "lon": 33.0827, "snow": 5, "wind": 5},
 }
@@ -170,13 +172,29 @@ def find_image(base_name):
     return None
 
 
+def check_strength(delta, dt):
+    D_vn = st.session_state.D_H - 2 * delta
+    sigma_kc_n = st.session_state.P * D_vn / (2 * delta)
+    sigma_kc_allow = (st.session_state.m / (0.9 * st.session_state.k_H)) * st.session_state.R2_n
+    sigma_pr_n = -st.session_state.alpha * st.session_state.E * dt + st.session_state.mu * sigma_kc_n
+    if sigma_pr_n < 0:
+        under_sqrt = 1 - 0.75 * (sigma_kc_n / sigma_kc_allow) ** 2
+        if under_sqrt < 0: return False, sigma_kc_n, sigma_kc_allow, sigma_pr_n, 0, 0
+        psi_1 = math.sqrt(under_sqrt) - 0.5 * (sigma_kc_n / sigma_kc_allow)
+    else:
+        psi_1 = 1.0
+    sigma_pr_allow = psi_1 * sigma_kc_allow
+    is_ok = (sigma_kc_n <= sigma_kc_allow) and (abs(sigma_pr_n) <= sigma_pr_allow)
+    return is_ok, sigma_kc_n, sigma_kc_allow, sigma_pr_n, psi_1, sigma_pr_allow
+
+
 # ==============================================================================
 # 1. КЛИМАТОЛОГИЯ
 # ==============================================================================
 if page == "1. Климатология":
     st.title("1. Расчетный температурный перепад (Δt)")
     st.markdown(
-        "<div class='info-text'>В данном разделе определяется разница между эксплуатационной температурой и температурой при сварке. Моделирование температурных зон выполняется методом IDW-интерполяции.</div>",
+        "<div class='info-text'>В данном разделе определяется разница между эксплуатационной температурой и температурой при сварке. Моделирование температурных зон выполняется методом IDW-интерполяции по границам РФ.</div>",
         unsafe_allow_html=True)
 
     col_map1, col_map2 = st.columns([1, 1])
@@ -239,12 +257,30 @@ if page == "1. Климатология":
         t_x, t_m = t_min_val - 6.0, t_max_val + 3.0
         dt_x, dt_m = st.session_state.t_product - t_x, st.session_state.t_product - t_m
         calc_dt = max(abs(dt_x), abs(dt_m))
-        st.latex(rf"t_x = {t_min_val} - 6 = {t_x}^\circ \text{{C (Замыкание зимой)}}")
-        st.latex(rf"t_m = {t_max_val} + 3 = {t_m}^\circ \text{{C (Замыкание летом)}}")
-        st.latex(rf"\Delta t_x = {st.session_state.t_product} - ({t_x}) = {dt_x}^\circ \text{{C}}")
-        st.latex(rf"\Delta t_m = {st.session_state.t_product} - ({t_m}) = {dt_m}^\circ \text{{C}}")
+        st.latex(
+            rf"t_x = {t_min_val} - 6 = {t_x}^\circ \text{{C (Зима)}} \quad t_m = {t_max_val} + 3 = {t_m}^\circ \text{{C (Лето)}}")
+        st.latex(
+            rf"\Delta t_x = {st.session_state.t_product} - ({t_x}) = {dt_x}^\circ \text{{C}} \quad \Delta t_m = {st.session_state.t_product} - ({t_m}) = {dt_m}^\circ \text{{C}}")
         st.success(f"**Расчетный перепад:** Δt = **{calc_dt} °C**")
         if st.button("Сохранить Δt"): st.session_state.delta_t = calc_dt
+
+    with st.expander("Посмотреть оригинальные карты из СНиП"):
+        tab_img1, tab_img2, tab_img3, tab_img4, tab_img5 = st.tabs(["t_max", "t_min", "Снег", "Ветер", "Гололед"])
+        with tab_img1:
+            img = find_image("Снимок экрана 2026-10-09 в 00.49.04") or find_image("map_max")
+            if img: st.image(img, caption="Карта максимальных температур", use_container_width=True)
+        with tab_img2:
+            img2 = find_image("Снимок экрана 2026-10-09 в 00.49.13") or find_image("map_min")
+            if img2: st.image(img2, caption="Карта минимальных температур", use_container_width=True)
+        with tab_img3:
+            img3 = find_image("Снимок экрана 2026-10-09 в 00.49.19") or find_image("map_snow")
+            if img3: st.image(img3, caption="Снеговые районы", use_container_width=True)
+        with tab_img4:
+            img4 = find_image("Снимок экрана 2026-10-09 в 00.49.27") or find_image("map_wind")
+            if img4: st.image(img4, caption="Ветровые районы", use_container_width=True)
+        with tab_img5:
+            img5 = find_image("Снимок экрана 2026-10-09 в 00.49.35") or find_image("map_ice")
+            if img5: st.image(img5, caption="Гололедные районы", use_container_width=True)
 
 # ==============================================================================
 # 2. ПРИМЕР 8.1

@@ -131,28 +131,17 @@ def get_next_thickness(calc_thickness, min_thickness=12.0):
 
 
 def fmt(val):
-    """Интеллектуальное округление до значащих цифр"""
+    """Обрезает пустые нули после запятой, оставляя только значащие цифры"""
     try:
         val = float(val)
         if val == 0: return "0"
-        abs_val = abs(val)
-        if abs_val < 0.0001:
-            res = f"{val:.8f}"
-        elif abs_val < 0.01:
-            res = f"{val:.6f}"
-        elif abs_val < 1:
-            res = f"{val:.4f}"
-        elif abs_val < 10:
-            res = f"{val:.3f}"
-        else:
-            res = f"{val:.2f}"
-        res = res.rstrip('0').rstrip('.')
+        res = f"{val:.4f}".rstrip('0').rstrip('.')
         return res.replace('.', ',')
     except:
         return str(val)
 
 
-# --- ИНИЦИАЛИЗАЦИЯ И ЖЕСТКОЕ СОХРАНЕНИЕ ВСЕХ ПЕРЕМЕННЫХ В ПАМЯТЬ ---
+# --- ЖЕСТКАЯ ИНИЦИАЛИЗАЦИЯ ПЕРЕМЕННЫХ ИЗ ПРИМЕРА ---
 state_defaults = {
     'product_type': "Нефть", 't_product': 5.0,
     'D_H': 1020.0, 'P': 6.0, 'n_p': 1.1,
@@ -165,22 +154,10 @@ state_defaults = {
     'rho_ins': 1750.0, 'delta_ins': 3.0, 'rho_gor': 1400.0, 'f_gr': 0.3, 'k_sdv': 1.25,
     'rho_v': 1400.0, 'alpha_v': 50.0, 'k_np': 1.25, 'q_gor_input': 84689.4
 }
+
 for k, v in state_defaults.items():
     if k not in st.session_state:
         st.session_state[k] = v
-    if f"temp_{k}" not in st.session_state:
-        st.session_state[f"temp_{k}"] = v
-
-
-def update_val(key):
-    st.session_state[key] = st.session_state[f"temp_{key}"]
-
-
-def update_t_product():
-    st.session_state.product_type = st.session_state.temp_product_type
-    st.session_state.t_product = 5.0 if st.session_state.product_type == "Нефть" else 6.0
-    st.session_state.temp_t_product = st.session_state.t_product
-
 
 st.sidebar.title("🛢️ Навигация РГР")
 page = st.sidebar.radio("Меню:", [
@@ -282,10 +259,15 @@ if page == "1. Климатология":
     st.markdown("<div class='step-header'>Вычисление расчетного перепада</div>", unsafe_allow_html=True)
     col3, col4 = st.columns(2)
     with col3:
-        st.radio("Тип продукта:", ["Нефть", "Газ"], key="temp_product_type",
-                 index=0 if st.session_state.product_type == "Нефть" else 1, on_change=update_t_product)
-        st.number_input("Температура продукта (t_э), °C", key="temp_t_product", value=float(st.session_state.t_product),
-                        on_change=update_val, args=("t_product",))
+        idx = 0 if st.session_state.product_type == "Нефть" else 1
+        new_type = st.radio("Тип продукта:", ["Нефть", "Газ"], index=idx)
+        if new_type != st.session_state.product_type:
+            st.session_state.product_type = new_type
+            st.session_state.t_product = 5.0 if new_type == "Нефть" else 6.0
+            st.rerun()
+
+        st.session_state.t_product = st.number_input("Температура продукта (t_э), °C",
+                                                     value=float(st.session_state.t_product))
 
     with col4:
         st.markdown(
@@ -297,28 +279,7 @@ if page == "1. Климатология":
         st.latex(rf"\Delta t_x = {fmt(st.session_state.t_product)} - ({fmt(t_min_val)}) = {fmt(dt_x)}^\circ \text{{C}}")
         st.latex(rf"\Delta t_m = {fmt(st.session_state.t_product)} - ({fmt(t_max_val)}) = {fmt(dt_m)}^\circ \text{{C}}")
         st.success(f"**Принятый перепад:** Δt = **{fmt(calc_dt)} °C**")
-        if st.button("Сохранить Δt"):
-            st.session_state.delta_t = calc_dt
-            st.session_state.temp_delta_t = calc_dt
-            st.rerun()
-
-    with st.expander("Посмотреть оригинальные карты из СНиП"):
-        tab_img1, tab_img2, tab_img3, tab_img4, tab_img5 = st.tabs(["t_max", "t_min", "Снег", "Ветер", "Гололед"])
-        with tab_img1:
-            img = find_image("Снимок экрана 2026-10-09 в 00.49.04") or find_image("map_max")
-            if img: st.image(img, caption="Карта максимальных температур", use_container_width=True)
-        with tab_img2:
-            img2 = find_image("Снимок экрана 2026-10-09 в 00.49.13") or find_image("map_min")
-            if img2: st.image(img2, caption="Карта минимальных температур", use_container_width=True)
-        with tab_img3:
-            img3 = find_image("Снимок экрана 2026-10-09 в 00.49.19") or find_image("map_snow")
-            if img3: st.image(img3, caption="Снеговые районы", use_container_width=True)
-        with tab_img4:
-            img4 = find_image("Снимок экрана 2026-10-09 в 00.49.27") or find_image("map_wind")
-            if img4: st.image(img4, caption="Ветровые районы", use_container_width=True)
-        with tab_img5:
-            img5 = find_image("Снимок экрана 2026-10-09 в 00.49.35") or find_image("map_ice")
-            if img5: st.image(img5, caption="Гололедные районы", use_container_width=True)
+        if st.button("Сохранить Δt"): st.session_state.delta_t = calc_dt
 
 # ==============================================================================
 # 2. ПРИМЕР 8.1
@@ -326,31 +287,22 @@ if page == "1. Климатология":
 elif page == "2. 8.1: Толщина стенки":
     st.title("2. Пример 8.1. Расчет толщины стенки")
     st.markdown(
-        "<div class='info-text'>Минимально необходимая толщина стенки трубы вычисляется по безмоментной теории оболочек от воздействия внутреннего давления.</div>",
+        "<div class='info-text'>Минимально необходимая толщина стенки трубы вычисляется по безмоментной теории оболочек (формула котла) от воздействия внутреннего давления. Полученное значение округляется до ближайшего большего из ГОСТ.</div>",
         unsafe_allow_html=True)
 
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.number_input("Наружный диаметр (D_н), мм", key="temp_D_H", value=float(st.session_state.D_H),
-                        on_change=update_val, args=("D_H",))
-        st.number_input("Рабочее давление (p), МПа", key="temp_P", value=float(st.session_state.P),
-                        on_change=update_val, args=("P",))
-        st.number_input("Надежность нагрузки (n_p)", key="temp_n_p", value=float(st.session_state.n_p),
-                        on_change=update_val, args=("n_p",))
+        st.session_state.D_H = st.number_input("Наружный диаметр (D_н), мм", value=float(st.session_state.D_H))
+        st.session_state.P = st.number_input("Рабочее давление (p), МПа", value=float(st.session_state.P))
+        st.session_state.n_p = st.number_input("Надежность нагрузки (n_p)", value=float(st.session_state.n_p))
     with col2:
-        st.number_input("Врем. сопротивление (R1_н), МПа", key="temp_R1_n", value=float(st.session_state.R1_n),
-                        on_change=update_val, args=("R1_n",))
-        st.number_input("Предел текучести (R2_н), МПа", key="temp_R2_n", value=float(st.session_state.R2_n),
-                        on_change=update_val, args=("R2_n",))
-        st.number_input("Условия работы (m)", key="temp_m", value=float(st.session_state.m), on_change=update_val,
-                        args=("m",))
+        st.session_state.R1_n = st.number_input("Врем. сопротивление (R1_н), МПа", value=float(st.session_state.R1_n))
+        st.session_state.R2_n = st.number_input("Предел текучести (R2_н), МПа", value=float(st.session_state.R2_n))
+        st.session_state.m = st.number_input("Условия работы (m)", value=float(st.session_state.m))
     with col3:
-        st.number_input("По материалу (k_1)", key="temp_k1", value=float(st.session_state.k1), on_change=update_val,
-                        args=("k1",))
-        st.number_input("По материалу (k_2)", key="temp_k2", value=float(st.session_state.k2), on_change=update_val,
-                        args=("k2",))
-        st.number_input("По ответственности (k_н)", key="temp_k_H", value=float(st.session_state.k_H),
-                        on_change=update_val, args=("k_H",))
+        st.session_state.k1 = st.number_input("По материалу (k_1)", value=float(st.session_state.k1))
+        st.session_state.k2 = st.number_input("По материалу (k_2)", value=float(st.session_state.k2))
+        st.session_state.k_H = st.number_input("По ответственности (k_н)", value=float(st.session_state.k_H))
 
     R1 = (st.session_state.R1_n * st.session_state.m) / (st.session_state.k1 * st.session_state.k_H)
     R2 = (st.session_state.R2_n * st.session_state.m) / (st.session_state.k2 * st.session_state.k_H)
@@ -369,10 +321,7 @@ elif page == "2. 8.1: Толщина стенки":
     st.markdown(
         f"<div class='result-block'>Округление по ГОСТ. Принятая толщина стенки: δ_н = {fmt(delta_nom)} мм</div>",
         unsafe_allow_html=True)
-    if st.button("Сохранить толщину"):
-        st.session_state.delta_n = delta_nom
-        st.session_state.temp_delta_n = delta_nom
-        st.rerun()
+    if st.button("Сохранить толщину"): st.session_state.delta_n = delta_nom
 
 # ==============================================================================
 # 3. ПРИМЕР 8.2
@@ -388,11 +337,10 @@ elif page == "3. 8.2: Прочность по деформациям":
     with tab_manual:
         col1, col2 = st.columns(2)
         with col1:
-            st.number_input("Толщина стенки δ_н, мм", key="temp_delta_n", value=float(st.session_state.delta_n),
-                            step=0.1, on_change=update_val, args=("delta_n",))
+            st.session_state.delta_n = st.number_input("Толщина стенки δ_н, мм", value=float(st.session_state.delta_n),
+                                                       step=0.1)
         with col2:
-            st.number_input("Темп. перепад Δt, °C", key="temp_delta_t", value=float(st.session_state.delta_t),
-                            on_change=update_val, args=("delta_t",))
+            st.session_state.delta_t = st.number_input("Темп. перепад Δt, °C", value=float(st.session_state.delta_t))
 
         is_ok, sig_kc, sig_kc_allow, sig_pr, psi, sig_pr_allow = check_strength(st.session_state.delta_n,
                                                                                 st.session_state.delta_t)
@@ -445,7 +393,6 @@ elif page == "3. 8.2: Прочность по деформациям":
                 if is_ok_iter:
                     st.success(f"**Толщина стенки успешно подобрана: {cur_d} мм.**")
                     st.session_state.delta_n = cur_d
-                    st.session_state.temp_delta_n = cur_d
                     break
                 else:
                     cur_d = get_next_thickness(cur_d + 0.1)
@@ -462,19 +409,15 @@ elif page == "4. 8.3: Продольная устойчивость":
 
     col1, col2 = st.columns(2)
     with col1:
-        st.number_input("Удельный вес грунта γ_гр, Н/м³", key="temp_gamma_gr", value=float(st.session_state.gamma_gr),
-                        on_change=update_val, args=("gamma_gr",))
-        st.number_input("Засыпка до верха h0, м", key="temp_h0", value=float(st.session_state.h0), on_change=update_val,
-                        args=("h0",))
-        st.number_input("Трение грунта φ, град", key="temp_phi_deg", value=float(st.session_state.phi_deg),
-                        on_change=update_val, args=("phi_deg",))
+        st.session_state.gamma_gr = st.number_input("Удельный вес грунта γ_гр, Н/м³",
+                                                    value=float(st.session_state.gamma_gr))
+        st.session_state.h0 = st.number_input("Засыпка до верха h0, м", value=float(st.session_state.h0))
+        st.session_state.phi_deg = st.number_input("Трение грунта φ, град", value=float(st.session_state.phi_deg))
     with col2:
-        st.number_input("Постель грунта k0, МН/м³", key="temp_k_0", value=float(st.session_state.k_0),
-                        on_change=update_val, args=("k_0",))
-        st.number_input("Плотность изоляции ρ_из, кг/м³", key="temp_rho_ins", value=float(st.session_state.rho_ins),
-                        on_change=update_val, args=("rho_ins",))
-        st.number_input("Толщина изоляции, мм", key="temp_delta_ins", value=float(st.session_state.delta_ins),
-                        on_change=update_val, args=("delta_ins",))
+        st.session_state.k_0 = st.number_input("Постель грунта k0, МН/м³", value=float(st.session_state.k_0))
+        st.session_state.rho_ins = st.number_input("Плотность изоляции ρ_из, кг/м³",
+                                                   value=float(st.session_state.rho_ins))
+        st.session_state.delta_ins = st.number_input("Толщина изоляции, мм", value=float(st.session_state.delta_ins))
 
     D_H_m, delta_m = st.session_state.D_H / 1000, st.session_state.delta_n / 1000
     D_vn_m = D_H_m - 2 * delta_m
@@ -548,17 +491,13 @@ elif page == "5. 8.4: Устойчивость в насыпи (Прямой)":
 
     col1, col2 = st.columns(2)
     with col1:
-        st.number_input("Высота до верхней образ. h1, м", key="temp_h1", value=float(st.session_state.h1),
-                        on_change=update_val, args=("h1",))
-        st.number_input("Полная высота насыпи H, м", key="temp_H", value=float(st.session_state.H),
-                        on_change=update_val, args=("H",))
-        st.number_input("Половина ширины поверху b, м", key="temp_b", value=float(st.session_state.b),
-                        on_change=update_val, args=("b",))
+        st.session_state.h1 = st.number_input("Высота до верхней образ. h1, м", value=float(st.session_state.h1))
+        st.session_state.H = st.number_input("Полная высота насыпи H, м", value=float(st.session_state.H))
+        st.session_state.b = st.number_input("Половина ширины поверху b, м", value=float(st.session_state.b))
     with col2:
-        st.number_input("Угол откоса насыпи α_н, град", key="temp_alpha_H", min_value=10.0,
-                        value=float(st.session_state.alpha_H), on_change=update_val, args=("alpha_H",))
-        st.number_input("Сцепление грунта c_гр, кПа", key="temp_c_gr", value=float(st.session_state.c_gr),
-                        on_change=update_val, args=("c_gr",))
+        st.session_state.alpha_H = st.number_input("Угол откоса насыпи α_н, град", min_value=10.0,
+                                                   value=float(st.session_state.alpha_H))
+        st.session_state.c_gr = st.number_input("Сцепление грунта c_гр, кПа", value=float(st.session_state.c_gr))
 
     D_H_m, delta_m = st.session_state.D_H / 1000, st.session_state.delta_n / 1000
     D_vn_m = D_H_m - 2 * delta_m
@@ -596,10 +535,11 @@ elif page == "5. 8.4: Устойчивость в насыпи (Прямой)":
     q_gor = E1 - E_act + E2
 
     st.latex(
-        rf"p_{{гр}} = \frac{{n_{{гр}} \gamma_{{гр}} h_0 (b + 0.5 h_0 \cot \alpha_н)}}{{b + h_0 \cot \alpha_н}} = {fmt(p_gr_nas)} \text{{ Па}}")
+        rf"p_{{гр}} = \frac{{n_{{гр}} \gamma_{{гр}} h_0 (b + 0.5 h_0 \cot \alpha_н)}}{{b + h_0 \cot \alpha_н}} = {fmt(p_gr_nas)} \text{{ Па}} \quad (\text{{давление на образующую}})")
     st.latex(
-        rf"E_1 = n_{{гр}}\gamma_{{гр}}(h_1^2 - h_2^2)\frac{{K_п}}{{2}} + p_{{гр}}h_1K_п + 2n_{{гр}}c_{{гр}}(h_1-h_2)\sqrt{{K_п}} = {fmt(E1)} \text{{ Н/м}}")
-    st.latex(rf"E_{{акт}} = n_{{гр}}\gamma_{{гр}}h_1^2\frac{{K_а}}{{2}} + p_{{гр}}h_1K_а = {fmt(E_act)} \text{{ Н/м}}")
+        rf"E_1 = n_{{гр}}\gamma_{{гр}}(h_1^2 - h_2^2)\frac{{K_п}}{{2}} + p_{{гр}}h_1K_п + 2n_{{гр}}c_{{гр}}(h_1-h_2)\sqrt{{K_п}} = {fmt(E1)} \text{{ Н/м}} \quad (\text{{пассивный отпор}})")
+    st.latex(
+        rf"E_{{акт}} = n_{{гр}}\gamma_{{гр}}h_1^2\frac{{K_а}}{{2}} + p_{{гр}}h_1K_а = {fmt(E_act)} \text{{ Н/м}} \quad (\text{{активное давление}})")
     st.latex(rf"E_2 = q_{{тр}} \tan \varphi = {fmt(E2)} \text{{ Н/м}} \quad (\text{{поперечное трение}})")
     st.latex(rf"q_{{гор}} = E_1 - E_{{акт}} + E_2 = {fmt(q_gor)} \text{{ Н/м}}")
 
@@ -631,13 +571,11 @@ elif page == "6. 8.5: Горизонтальный поворот":
 
     col1, col2 = st.columns(2)
     with col1:
-        st.number_input("Радиус гориз. поворота ρ_гор, м", key="temp_rho_gor", value=float(st.session_state.rho_gor),
-                        on_change=update_val, args=("rho_gor",))
-        st.number_input("Запас против сдвига k_сдв", key="temp_k_sdv", value=float(st.session_state.k_sdv),
-                        on_change=update_val, args=("k_sdv",))
+        st.session_state.rho_gor = st.number_input("Радиус гориз. поворота ρ_гор, м",
+                                                   value=float(st.session_state.rho_gor))
+        st.session_state.k_sdv = st.number_input("Запас против сдвига k_сдв", value=float(st.session_state.k_sdv))
     with col2:
-        st.number_input("Трение трубы о грунт f_гр", key="temp_f_gr", value=float(st.session_state.f_gr),
-                        on_change=update_val, args=("f_gr",))
+        st.session_state.f_gr = st.number_input("Трение трубы о грунт f_гр", value=float(st.session_state.f_gr))
 
     D_H_m, delta_m = st.session_state.D_H / 1000, st.session_state.delta_n / 1000
     D_vn_m = D_H_m - 2 * delta_m
@@ -695,13 +633,11 @@ elif page == "7. 8.6: Вертикальный поворот":
 
     col1, col2 = st.columns(2)
     with col1:
-        st.number_input("Радиус верт. поворота ρ_в, м", key="temp_rho_v", value=float(st.session_state.rho_v),
-                        on_change=update_val, args=("rho_v",))
-        st.number_input("Угол верт. поворота α_в, град", key="temp_alpha_v", value=float(st.session_state.alpha_v),
-                        on_change=update_val, args=("alpha_v",))
+        st.session_state.rho_v = st.number_input("Радиус верт. поворота ρ_в, м", value=float(st.session_state.rho_v))
+        st.session_state.alpha_v = st.number_input("Угол верт. поворота α_в, град",
+                                                   value=float(st.session_state.alpha_v))
     with col2:
-        st.number_input("Запас против подъема k_н.п", key="temp_k_np", value=float(st.session_state.k_np),
-                        on_change=update_val, args=("k_np",))
+        st.session_state.k_np = st.number_input("Запас против подъема k_н.п", value=float(st.session_state.k_np))
 
     D_H_m, delta_m = st.session_state.D_H / 1000, st.session_state.delta_n / 1000
     D_vn_m = D_H_m - 2 * delta_m
@@ -759,8 +695,8 @@ elif page == "8. 8.7: Продольные перемещения":
     st.title("8. Пример 8.7. Продольные перемещения")
     col1, col2 = st.columns(2)
     with col1:
-        st.number_input("Коэфф. постели при сдвиге k_и, МН/м³", key="temp_k_i", value=float(st.session_state.k_i),
-                        on_change=update_val, args=("k_i",))
+        st.session_state.k_i = st.number_input("Коэфф. постели при сдвиге k_и, МН/м³",
+                                               value=float(st.session_state.k_i))
 
     D_H_m, delta_m = st.session_state.D_H / 1000, st.session_state.delta_n / 1000
     D_vn_m = D_H_m - 2 * delta_m

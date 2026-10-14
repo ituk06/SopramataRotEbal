@@ -957,6 +957,6 @@ elif page == "9. Итоговый отчет":
         st.markdown(
             f"**Итог:** Усилие S меньше предельного P_пр (**{fmt(S)} \le {fmt(P_pr_87)} МН**). Связь упругая, проскальзывания нет.")
 
-    st.info("💡 Нажмите `Ctrl + P` (или `Cmd + P` на Mac) и выберите «Сохранить как PDF».")
+    st.info("💡 Нажмите `Ctrl + P` (или `Cmd + P` на Mac) и выберите «Сохранить как PDF». ")
     if st.button("🖨️ Открыть диалог печати (PDF)"):
         st.components.v1.html("<script>window.parent.print();</script>", height=0)
